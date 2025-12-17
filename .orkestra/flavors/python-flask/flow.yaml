@@ -1,0 +1,40 @@
+# Workflow configuration
+global_instructions: "global.instructions.md"
+
+steps:
+  - id: "0_planning"
+    role: "product_manager"
+    instruction_files:
+      - "planning.instructions.md"
+    prompt: "Create a detailed implementation plan covering both Backend and Frontend layers."
+    output_file: ".orkestra/outputs/plan.md"
+    
+  - id: "1_backend"
+    role: "backend_developer"
+    instruction_files:
+      - "coding.instructions.md"
+    prompt: "Implement the Backend layer based on the plan."
+    input_files:
+      - ".orkestra/outputs/plan.md"
+    output_file: ".orkestra/outputs/backend.md"
+
+  - id: "2_frontend"
+    role: "frontend_developer"
+    instruction_files:
+      - "coding.instructions.md"
+    prompt: "Implement the Frontend layer based on the plan and backend implementation."
+    input_files:
+      - ".orkestra/outputs/plan.md"
+      - ".orkestra/outputs/backend.md"
+    output_file: ".orkestra/outputs/frontend.md"
+    
+  - id: "3_review"
+    role: "code_reviewer"
+    instruction_files:
+      - "review.instructions.md"
+    sub_agent: "gemini"
+    prompt: "Review the backend and frontend implementation for consistency, bugs, and best practices."
+    input_files:
+      - ".orkestra/outputs/backend.md"
+      - ".orkestra/outputs/frontend.md"
+    output_file: ".orkestra/outputs/review.md"

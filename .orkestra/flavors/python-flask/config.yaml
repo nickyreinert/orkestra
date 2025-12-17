@@ -1,0 +1,22 @@
+# Sub-agent CLI configurations
+sub_agents:
+  gemini:
+    command: "gemini-cli"
+    args_template: "--prompt '{prompt}' --context-file '{context_file}'"
+    output_parser: "text"
+    
+  mistral:
+    command: "mistral"
+    args_template: "chat '{prompt}' --file '{context_file}'"
+    output_parser: "text"
+    
+  claude:
+    command: "claude-code"
+    args_template: "--message '{prompt}' --files {files}"
+    output_parser: "text"
+
+# Validation tools
+validation_tools:
+  pytest: "pytest tests/ -v"
+  eslint: "eslint src/ --fix"
+  mypy: "mypy src/"

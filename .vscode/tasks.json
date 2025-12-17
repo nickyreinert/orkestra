@@ -1,0 +1,37 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Orkestrate: Start Workflow",
+            "type": "shell",
+            "command": "echo 'Workflow started. Copilot will read .orkestra/state.json and begin.'",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Orkestrate: Reset",
+            "type": "shell",
+            "command": "rm -f .orkestra/state.json && echo '{\"current_step_index\": 0, \"previous_output\": {}}' > .orkestra/state.json",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Orkestrate: Next Step",
+            "type": "shell",
+            "command": "echo 'Ask Copilot to execute next step'",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Test Sub-Agent: Gemini",
+            "type": "shell",
+            "command": ".orkestra/scripts/run_sub_agent.sh gemini 'Review this code' 'src/main.py' '.orkestra/outputs/test.txt'",
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
+}

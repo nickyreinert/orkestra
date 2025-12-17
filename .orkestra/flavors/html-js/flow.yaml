@@ -1,0 +1,29 @@
+# Workflow configuration
+global_instructions: "global.instructions.md"
+
+steps:
+  - id: "0_planning"
+    role: "product_manager"
+    instruction_files:
+      - "planning.instructions.md"
+    prompt: "Create a detailed implementation plan for the HTML/JS application."
+    output_file: ".orkestra/outputs/plan.md"
+    
+  - id: "1_implementation"
+    role: "frontend_developer"
+    instruction_files:
+      - "coding.instructions.md"
+    prompt: "Implement the HTML, CSS, and JavaScript based on the plan."
+    input_files:
+      - ".orkestra/outputs/plan.md"
+    output_file: ".orkestra/outputs/implementation.md"
+    
+  - id: "2_review"
+    role: "code_reviewer"
+    instruction_files:
+      - "review.instructions.md"
+    sub_agent: "gemini"
+    prompt: "Review the implementation for best practices, accessibility, and bugs."
+    input_files:
+      - ".orkestra/outputs/implementation.md"
+    output_file: ".orkestra/outputs/review.md"

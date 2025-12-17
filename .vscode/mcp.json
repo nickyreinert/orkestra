@@ -1,0 +1,23 @@
+{
+  "servers": {
+    "github-mcp": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["chrome-devtools-mcp@latest"]
+    },
+    "openllama-ollama": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-ollama",
+        "http://localhost:11434",
+        "openllama"
+      ]
+    }
+
+  }
+}
+
