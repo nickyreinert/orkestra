@@ -1,5 +1,7 @@
 # Orkestra
 
+<p align="center"><img src="orkestra.png" width="128" alt="Orkestra logo"></p>
+
 Orchestration framework for VS Code Copilot that coordinates multi-step AI development workflows with optional CLI sub-agents.
 
 ## Purpose
@@ -79,27 +81,70 @@ rm -f .orkestra/state.json && echo '{"current_step_index": 0, "previous_output":
 
 ## Structure
 
+This repository contains the framework source code and flavor definitions.
+
 ```
 .orkestra/
-├── config.yaml                  # Sub-agent + validation tool config
-├── flow.yaml                    # Workflow definition
-├── state.json                   # Current progress for Copilot
-├── instructions/                # Instruction sets loaded per step
-│   ├── global.instructions.md
-│   ├── planning.instructions.md
-│   ├── coding.instructions.md
-│   ├── testing.instructions.md
-│   └── review.instructions.md
-├── outputs/                     # Generated artifacts per step
-└── scripts/
-    └── run_sub_agent.sh         # Helper script for CLI sub-agents
+├── flavors/                     # Project templates
+│   ├── python-flask/            # Example flavor
+│   │   ├── config.yaml          # Flavor-specific config
+│   │   ├── flow.yaml            # Flavor-specific workflow
+│   │   └── instructions/        # Flavor-specific instructions
+│   └── [other-flavors]/
+├── scripts/                     # Shared utility scripts
+│   └── run_sub_agent.sh
+└── state.json                   # Local state (for dev/testing)
+
+bin/
+└── init-orkestra.sh             # Initialization script
 
 .github/
-└── copilot-instructions.md      # Tells Copilot how to load state + instructions
+└── copilot-instructions.md      # Global Copilot instructions
 
 .vscode/
-└── tasks.json                   # Convenience tasks (start, reset, next step, test sub-agent)
+└── tasks.json                   # VS Code tasks
 ```
+
+## Flavors & Initialization
+
+Orkestra uses "flavors" to define project-specific workflows. Each flavor (located in `.orkestra/flavors/`) contains its own:
+- `flow.yaml`: The workflow steps and rules.
+- `config.yaml`: Configuration for sub-agents and tools.
+- `instructions/`: Markdown files with role-specific prompts.
+
+When you run `bin/init-orkestra.sh` in a new project:
+1. You select a flavor (e.g., `python-flask`).
+2. The script copies that flavor's `flow.yaml`, `config.yaml`, and `instructions/` into your project's `.orkestra/` directory.
+3. It also installs the shared `scripts/` and `.github/copilot-instructions.md`.
+
+This ensures that every project has a self-contained configuration tailored to its technology stack.
+
+Key points:
+- **Where defined:** Flavors are declared during `init-orkestra.sh` and referenced in `flow.yaml` or `config.yaml`.
+- **What they change:** the set of instruction files, default task order, scaffolding templates, and optional sub-agent hooks.
+- **How instructions are chosen:** When a flavor is active, Orkestra will prefer instruction files under `instructions/<flavor>/` (if present) and fall back to the global files in `instructions/`.
+
+Example `flow.yaml` snippet showing a flavor-aware step:
+
+```yaml
+flavor: python-flask
+steps:
+    - id: planning
+        role: product
+        instructions:
+            - instructions/global.instructions.md
+            - instructions/python-flask/planning.instructions.md
+        output: .orkestra/outputs/plan.md
+
+    - id: backend
+        role: backend
+        instructions:
+            - instructions/global.instructions.md
+            - instructions/python-flask/coding.instructions.md
+        output: .orkestra/outputs/backend.md
+```
+
+This approach keeps global guidance available while allowing flavor-specific behavior to override or extend steps.
 
 ## Customization
 
