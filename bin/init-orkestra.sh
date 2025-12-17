@@ -142,21 +142,10 @@ else
     cp -r "$SOURCE_DIR/.orkestra/scripts/"* "$TARGET_DIR/.orkestra/scripts/"
 fi
 
-# 3. Copy .github/copilot-instructions.md (Shared)
+# 4. Copy .github/copilot-instructions.md (Shared)
 mkdir -p "$TARGET_DIR/.github"
 if [ ! -f "$TARGET_DIR/.github/copilot-instructions.md" ]; then
     cp "$SOURCE_DIR/.github/copilot-instructions.md" "$TARGET_DIR/.github/"
-fi
-
-# 4. Copy .github/agents (Shared)
-if [ -d "$SOURCE_DIR/.github/agents" ]; then
-    mkdir -p "$TARGET_DIR/.github/agents"
-    # Use rsync if available, otherwise cp
-    if command -v rsync >/dev/null 2>&1; then
-        rsync -av --exclude='.DS_Store' "$SOURCE_DIR/.github/agents/" "$TARGET_DIR/.github/agents/" > /dev/null
-    else
-        cp -r "$SOURCE_DIR/.github/agents/"* "$TARGET_DIR/.github/agents/"
-    fi
 fi
 
 # 5. Copy .vscode/tasks.json (Shared)
