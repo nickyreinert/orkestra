@@ -46,11 +46,13 @@ On **EVERY** interaction, follow this exact sequence:
 - Run validation via terminal
 
 ### 6. SAVE AND ADVANCE
-- Save output to `output_file` path
-- Update `state.json`:
-  - Increment `current_step_index`
-  - Store output in `previous_output[step_id]`
-- Show `handoff_message` to user
+- **CHECK:** If you are asking the user for clarification or input (e.g., the goal is missing), **STOP HERE**. Do NOT save output or update state. Wait for user response.
+- **OTHERWISE:**
+  - Save output to `output_file` path
+  - Update `state.json`:
+    - Increment `current_step_index`
+    - Store output in `previous_output[step_id]`
+  - Show `handoff_message` to user
 
 ## STATE FORMAT
 
