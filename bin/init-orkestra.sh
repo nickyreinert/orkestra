@@ -183,8 +183,6 @@ if [ "$GIT_OPT" == "Yes" ]; then
         
         # Create .gitignore if it doesn't exist
         if [ ! -f "$TARGET_DIR/.gitignore" ]; then
-            echo ".orkestra/state.json" >> "$TARGET_DIR/.gitignore"
-            echo ".orkestra/outputs/" >> "$TARGET_DIR/.gitignore"
             echo ".orkestra/tmp/" >> "$TARGET_DIR/.gitignore"
             echo -e "${CYAN}Created default .gitignore${NC}"
         fi
