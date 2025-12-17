@@ -124,10 +124,9 @@ Key points:
 - **What they change:** the set of instruction files, default task order, scaffolding templates, and optional sub-agent hooks.
 - **How instructions are chosen:** When a flavor is active, Orkestra will prefer instruction files under `instructions/<flavor>/` (if present) and fall back to the global files in `instructions/`.
 
-Example `flow.yaml` snippet showing a flavor-aware step:
+Example `flow.yaml`:
 
 ```yaml
-flavor: python-flask
 steps:
     - id: planning
         role: product

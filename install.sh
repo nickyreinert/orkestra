@@ -35,7 +35,18 @@ case "$SHELL" in
     SHELL_CONFIG="$HOME/.zshrc"
     ;;
 */bash)
-    SHELL_CONFIG="$HOME/.bashrc"
+    # Prefer .bashrc if it exists, otherwise .bash_profile, otherwise default based on OS
+    if [ -f "$HOME/.bashrc" ]; then
+        SHELL_CONFIG="$HOME/.bashrc"
+    elif [ -f "$HOME/.bash_profile" ]; then
+        SHELL_CONFIG="$HOME/.bash_profile"
+    else
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            SHELL_CONFIG="$HOME/.bash_profile"
+        else
+            SHELL_CONFIG="$HOME/.bashrc"
+        fi
+    fi
     ;;
 *)
     # Fallback for other shells or if SHELL is not set
@@ -43,12 +54,19 @@ case "$SHELL" in
         SHELL_CONFIG="$HOME/.zshrc"
     elif [ -f "$HOME/.bashrc" ]; then
         SHELL_CONFIG="$HOME/.bashrc"
+    elif [ -f "$HOME/.bash_profile" ]; then
+        SHELL_CONFIG="$HOME/.bash_profile"
     else
-        echo "Could not detect shell config file. Please manually add $BIN_DIR to your PATH."
-        exit 1
+        # Default fallback
+        SHELL_CONFIG="$HOME/.profile"
     fi
     ;;
 esac
+
+# Ensure config file exists to avoid grep errors
+if [ ! -f "$SHELL_CONFIG" ]; then
+    touch "$SHELL_CONFIG"
+fi
 
 # Check if already in path
 if grep -q "$BIN_DIR" "$SHELL_CONFIG"; then
