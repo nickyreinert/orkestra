@@ -154,3 +154,12 @@ Edit `.orkestra/flow.yaml` to insert new roles, inputs, outputs, or sub-agents.
 ### Add CLI Validators
 
 Define new entries under `sub_agents` or `validation_tools` inside `.orkestra/config.yaml` to integrate linters, security scanners, or other automation.
+
+## Sub-Agents & Tools
+
+Orkestra's default configuration references example CLI tools (like `gemini-cli`, `mistral`, `claude-code`). **These are not installed by Orkestra.**
+
+You must:
+1.  Install the CLI tools you want to use (e.g., `pip install gemini-cli` if available, or your own wrapper script).
+2.  Ensure they are in your system `PATH`.
+3.  Or, edit `.orkestra/config.yaml` to point to the correct executable path (e.g., `command: "/usr/bin/python3 scripts/my_gemini_wrapper.py"`).

@@ -10,8 +10,19 @@ OUTPUT_FILE=$4
 CONFIG_FILE=".orkestra/config.yaml"
 
 # Extract command and args template (requires yq or python)
-COMMAND=$(grep -A 2 "^  $SUB_AGENT:" "$CONFIG_FILE" | grep "command:" | awk '{print $2}' | tr -d '"')
-ARGS_TEMPLATE=$(grep -A 2 "^  $SUB_AGENT:" "$CONFIG_FILE" | grep "args_template:" | cut -d'"' -f2)
+# Simple grep/awk parsing (assumes standard formatting)
+COMMAND_LINE=$(grep -A 2 "^  $SUB_AGENT:" "$CONFIG_FILE" | grep "command:" | head -n 1)
+COMMAND=$(echo "$COMMAND_LINE" | sed -E 's/.*command: "([^"]+)".*/\1/')
+ARGS_TEMPLATE_LINE=$(grep -A 2 "^  $SUB_AGENT:" "$CONFIG_FILE" | grep "args_template:" | head -n 1)
+ARGS_TEMPLATE=$(echo "$ARGS_TEMPLATE_LINE" | sed -E 's/.*args_template: "([^"]+)".*/\1/')
+
+# Check if command exists
+if ! command -v "$(echo "$COMMAND" | awk '{print $1}')" &> /dev/null; then
+    echo "❌ Error: Sub-agent command '$COMMAND' not found in PATH."
+    echo "   Please check .orkestra/config.yaml and ensure the tool is installed."
+    echo "   Current PATH: $PATH"
+    exit 1
+fi
 
 # Replace placeholders
 ARGS="${ARGS_TEMPLATE//\{prompt\}/$PROMPT}"
