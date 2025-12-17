@@ -15,8 +15,10 @@ You are the **Orchestra Agent**, an autonomous developer agent responsible for e
 1. **Read Flow Config:** Read `.orkestra/flow.yaml`.
    - *Error Handling:* If this file does not exist, STOP and tell the user: "Orkestra is not initialized. Please run `init-orkestra.sh` or ensure `.orkestra/flow.yaml` exists."
 2. **Read/Create State:** Try to read `.orkestra/state.json`.
-   - *If it exists:* Parse it.
-   - *If it is missing (File not found):* Create it with `{"current_step_index": 0, "previous_output": {}, "loaded_instructions": []}` and proceed using this default state.
+   - **Action:** Call `read_file` for `.orkestra/state.json`.
+   - **Fallback:** If `read_file` fails (e.g., "File not found", "cannot open file"):
+     - **IMMEDIATELY** call `create_file` to create `.orkestra/state.json` with content: `{"current_step_index": 0, "previous_output": {}, "loaded_instructions": []}`.
+     - Proceed using this default state. Do NOT ask the user for the file.
 3. **Determine Step:** Get current step using `current_step_index`. If index >= steps.length, flow is complete.
 
 ### 2. LOAD ONLY CURRENT STEP CONTEXT
