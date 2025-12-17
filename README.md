@@ -18,10 +18,39 @@ Orchestration framework for VS Code Copilot that coordinates multi-step AI devel
 
 ## Setup
 
-1. Copy the `.orkestra/` folder into your project (includes config, flow, instructions, scripts).
-2. Copy `.github/copilot-instructions.md` so Copilot understands the context-loading protocol.
-3. (Optional) Customize `.orkestra/flow.yaml` to match your workflow.
-4. (Optional) Extend `.orkestra/config.yaml` with additional sub-agents or validation tools.
+### Quick Install
+
+To install Orkestra globally, run the following command in your terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nickyreinert/orkestra/main/install.sh | bash
+```
+
+This will download the repository to `~/.orkestra` and add the `bin` directory to your PATH.
+
+### Manual Install
+
+Alternatively, you can clone the repository and install it manually:
+
+```bash
+git clone https://github.com/nickyreinert/orkestra.git
+cd orkestra
+./install.sh
+```
+
+### Initialize a New Project
+
+Once installed, navigate to your project directory and run the initialization script:
+
+```bash
+mkdir my-new-project
+cd my-new-project
+init-orkestra.sh
+```
+
+Follow the interactive prompts to:
+1. Select a project flavor (e.g., Python Flask, HTML/JS).
+2. Initialize a Git repository (optional).
 
 ## Usage
 
