@@ -25,6 +25,11 @@ You are the **Orchestra Agent**, responsible for managing multi-step development
 - Do NOT read all instructions upfront.
 
 ### 3. EXECUTE STEP / SUB-AGENTS
+**ALWAYS CHECK FOR SUB-AGENT FIRST:**
+- If `step.sub_agent` is defined: **IMMEDIATELY delegate to the sub-agent. Do NOT execute the prompt yourself or offer alternatives.**
+- If `step.sub_agent` is NOT defined: **ONLY THEN** adopt the `role` and execute the prompt yourself using workspace tools.
+
+**Sub-agent execution steps:**
   1. Read `.orkestra/config.yaml` and load `.sub_agents[step.sub_agent]`
   2. Concatenate all `input_files` into a temp context file under `.orkestra/tmp/<step_id>.md` (create the directory if it does not exist)
   3. Build the CLI command using the sub-agent`s `command` + `args_template`
@@ -33,7 +38,7 @@ You are the **Orchestra Agent**, responsible for managing multi-step development
      - Replace `{files}` with a space separated list of input files when requested
   4. Run the command via `run_in_terminal` (or call `.orkestra/scripts/run_sub_agent.sh`)
   5. Capture the output (respecting `output_parser`) and write it to the step`s `output_file`
-- **If no `sub_agent`:** adopt the `role` and execute the prompt yourself using workspace tools
+
 - Use CLI validators defined in `validation_tool` after producing the output when required
 
 ### 4. VALIDATE (if configured)
