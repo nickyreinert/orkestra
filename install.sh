@@ -28,6 +28,11 @@ BIN_DIR="$INSTALL_DIR/bin"
 # Make the init script executable
 chmod +x "$BIN_DIR/init-orkestra.sh"
 
+# Create a symlink without .sh extension for easier access
+if [ ! -L "$BIN_DIR/init-orkestra" ]; then
+    ln -sf "$BIN_DIR/init-orkestra.sh" "$BIN_DIR/init-orkestra"
+fi
+
 # Detect shell config file
 SHELL_CONFIG=""
 case "$SHELL" in
@@ -80,4 +85,4 @@ fi
 
 echo "Installation complete!"
 echo "Please restart your terminal or run 'source $SHELL_CONFIG'"
-echo "Then run 'init-orkestra.sh' in any project to set up the workflow."
+echo "Then run 'init-orkestra' in any project to set up the workflow."
