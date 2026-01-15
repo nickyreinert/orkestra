@@ -47,7 +47,7 @@ Once installed, navigate to your project directory and run the initialization sc
 ```bash
 mkdir my-new-project
 cd my-new-project
-init-orkestra.sh
+init-orkestra
 ```
 
 Follow the interactive prompts to:
