@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import difflib
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -21,6 +22,41 @@ DEFAULT_GLOBAL_SETTINGS_PATH = ROOT / "settings" / "global-locations.yaml"
 USER_GLOBAL_SETTINGS_PATH = HOME_DIR / ".config" / "orkestra" / "settings.yaml"
 HOST = os.environ.get("ORKESTRA_WEBUI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ORKESTRA_WEBUI_PORT", "8732"))
+AUTO_RELOAD_SERVER = os.environ.get("ORKESTRA_WEBUI_AUTO_RELOAD_SERVER", "1") == "1"
+
+WEBUI_WATCH_FILES = [
+    WEBUI_DIR / "index.html",
+    WEBUI_DIR / "app.js",
+    WEBUI_DIR / "styles.css",
+]
+SERVER_WATCH_FILES = [Path(__file__).resolve()]
+
+
+def watch_signature(paths: list[Path]) -> str:
+    chunks: list[str] = []
+    for p in paths:
+        if p.exists() and p.is_file():
+            chunks.append(f"{p}:{p.stat().st_mtime_ns}")
+        else:
+            chunks.append(f"{p}:missing")
+    return "|".join(chunks)
+
+
+SERVER_SIGNATURE = watch_signature(SERVER_WATCH_FILES)
+
+
+def maybe_restart_on_server_change() -> None:
+    global SERVER_SIGNATURE
+    if not AUTO_RELOAD_SERVER:
+        return
+
+    current = watch_signature(SERVER_WATCH_FILES)
+    if current == SERVER_SIGNATURE:
+        return
+
+    SERVER_SIGNATURE = current
+    print("Orkestra WebUI: server source changed, restarting...")
+    os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
 def safe_name(value: str) -> bool:
@@ -360,6 +396,41 @@ def compose_template_instruction_bundle(template: str) -> str:
     return ("\n\n---\n\n".join(sections)).strip() + "\n"
 
 
+def compose_selected_sources_bundle(source_paths: list[str]) -> str:
+    sections: list[str] = []
+
+    for rel in source_paths:
+        candidate = (ROOT / rel).resolve()
+        if not str(candidate).startswith(str(ROOT)):
+            continue
+        if not candidate.exists() or not candidate.is_file():
+            continue
+
+        try:
+            parts = candidate.relative_to(ROOT).parts
+        except ValueError:
+            continue
+        if not is_source_write_allowed(parts):
+            continue
+
+        title = rel.replace("_", " ")
+        body = candidate.read_text(encoding="utf-8").strip()
+        sections.append(f"## Source: {title}\n\n{body}")
+
+    if not sections:
+        return ""
+    return ("\n\n---\n\n".join(sections)).strip() + "\n"
+
+
+def project_target_for_agent(agent: str) -> Path | None:
+    mapping = {
+        "claude": PROJECT_DIR / "CLAUDE.md",
+        "codex": PROJECT_DIR / "AGENTS.md",
+        "copilot": PROJECT_DIR / ".github" / "copilot-instructions.md",
+    }
+    return mapping.get(agent)
+
+
 def run_orkestra(args: list[str]) -> tuple[bool, int, str, str]:
     binary = shutil.which("orkestra")
     if binary is None:
@@ -384,6 +455,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = json.dumps(payload, ensure_ascii=True, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -395,6 +467,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -411,6 +484,8 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self) -> None:
+        maybe_restart_on_server_change()
+
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -446,6 +521,13 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "projectDir": str(PROJECT_DIR),
                     "initialized": (PROJECT_DIR / ".orkestra").is_dir(),
+                }
+            )
+
+        if path == "/api/dev-hash":
+            return self._send_json(
+                {
+                    "hash": watch_signature(WEBUI_WATCH_FILES),
                 }
             )
 
@@ -542,6 +624,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404, "Not found")
 
     def do_POST(self) -> None:
+        maybe_restart_on_server_change()
+
         parsed = urlparse(self.path)
         if parsed.path == "/api/save":
             data = self._read_json()
@@ -855,6 +939,63 @@ class Handler(BaseHTTPRequestHandler):
                     "agents": cleaned_agents,
                     "written": written,
                     "stdout": "Wrote global instruction bundle for selected agents.",
+                    "stderr": "",
+                }
+            )
+
+        if parsed.path == "/api/deploy-section":
+            data = self._read_json()
+            destination = str(data.get("destination", "")).strip()
+            source_paths = data.get("sourcePaths", [])
+            agents = data.get("agents", [])
+
+            if destination not in {"global", "project"}:
+                return self._send_json({"error": "Invalid destination"}, status=400)
+            if not isinstance(source_paths, list) or not source_paths:
+                return self._send_json({"error": "Select at least one source file"}, status=400)
+            if not isinstance(agents, list) or not agents:
+                return self._send_json({"error": "Select at least one target"}, status=400)
+
+            valid_agents = set(list_agents())
+            cleaned_agents = [a.strip() for a in agents if isinstance(a, str) and a.strip() in valid_agents]
+            if not cleaned_agents:
+                return self._send_json({"error": "No valid target selected"}, status=400)
+
+            cleaned_paths = [p.strip() for p in source_paths if isinstance(p, str) and p.strip()]
+            bundle = compose_selected_sources_bundle(cleaned_paths)
+            if not bundle:
+                return self._send_json({"error": "No valid source files selected"}, status=400)
+
+            written: list[str] = []
+
+            if destination == "global":
+                for agent in cleaned_agents:
+                    target_file = global_target_for_agent(agent)
+                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                    target_file.write_text(bundle, encoding="utf-8")
+                    written.append(str(target_file))
+            else:
+                if not (PROJECT_DIR / ".orkestra").is_dir():
+                    return self._send_json({"error": "Project is not initialized (.orkestra missing)"}, status=400)
+
+                for agent in cleaned_agents:
+                    target_file = project_target_for_agent(agent)
+                    if target_file is None:
+                        continue
+                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                    target_file.write_text(bundle, encoding="utf-8")
+                    written.append(str(target_file))
+
+            if not written:
+                return self._send_json({"error": "No writable targets for selection"}, status=400)
+
+            return self._send_json(
+                {
+                    "ok": True,
+                    "destination": destination,
+                    "agents": cleaned_agents,
+                    "written": written,
+                    "stdout": f"Deployed selected section to {destination} targets.",
                     "stderr": "",
                 }
             )

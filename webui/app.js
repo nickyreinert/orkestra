@@ -1,6 +1,12 @@
 const sourceColumn = document.getElementById('sourceColumn');
 const globalColumn = document.getElementById('globalColumn');
 const renderedColumn = document.getElementById('renderedColumn');
+const sourceFilters = document.getElementById('sourceFilters');
+const globalFilters = document.getElementById('globalFilters');
+const renderedFilters = document.getElementById('renderedFilters');
+const filesGrid = document.getElementById('filesGrid');
+const sourceFileColumn = document.getElementById('sourceFileColumn');
+const toggleSourceColBtn = document.getElementById('toggleSourceColBtn');
 
 const leftEditor = document.getElementById('leftEditor');
 const rightEditor = document.getElementById('rightEditor');
@@ -39,6 +45,149 @@ let primary = null;
 let secondary = null;
 let compareArmed = false;
 let currentDiffBlocks = [];
+let sourceTemplateFilter = 'all';
+let globalAgentFilter = 'all';
+let renderedAgentFilter = 'all';
+let sourceCollapsed = false;
+let devHash = null;
+const sectionTargetSelections = {};
+
+function titleCase(value) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function renderPills(container, options, active, onPick) {
+  if (!container) return;
+  container.innerHTML = '';
+  options.forEach((opt) => {
+    const btn = document.createElement('button');
+    btn.className = 'pillBtn' + (opt.value === active ? ' active' : '');
+    btn.textContent = opt.label;
+    btn.onclick = () => onPick(opt.value);
+    container.appendChild(btn);
+  });
+}
+
+function ensureSectionSelection(sectionKey, agents) {
+  if (!sectionTargetSelections[sectionKey]) {
+    sectionTargetSelections[sectionKey] = { global: {}, project: {} };
+  }
+  const state = sectionTargetSelections[sectionKey];
+  ['global', 'project'].forEach((scope) => {
+    agents.forEach((agent) => {
+      if (typeof state[scope][agent] !== 'boolean') {
+        state[scope][agent] = false;
+      }
+    });
+  });
+}
+
+function selectedTargets(sectionKey, scope) {
+  const scopeState = (sectionTargetSelections[sectionKey] || {})[scope] || {};
+  return Object.keys(scopeState).filter((agent) => scopeState[agent]);
+}
+
+function createSectionDeployControls(sectionKey, sourcePaths, availableAgents) {
+  ensureSectionSelection(sectionKey, availableAgents);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sectionDeploy';
+
+  const projectAvailable = !!(latestIndex && latestIndex.renderedAvailable);
+  const rows = [
+    { scope: 'global', label: 'G', enabled: true },
+    { scope: 'project', label: 'P', enabled: projectAvailable },
+  ];
+
+  rows.forEach((row) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'sectionDeployRow';
+
+    const deployBtn = document.createElement('button');
+    deployBtn.className = 'sectionArrowBtn';
+    deployBtn.textContent = '\u2192';
+    deployBtn.title = `Deploy this section to ${row.scope}`;
+    deployBtn.disabled = !row.enabled;
+    deployBtn.onclick = async () => {
+      const targets = selectedTargets(sectionKey, row.scope);
+      if (!targets.length) {
+        alert(`Select at least one ${row.scope} target first.`);
+        return;
+      }
+      await deploySection(row.scope, sourcePaths, targets);
+    };
+
+    const scopeTag = document.createElement('span');
+    scopeTag.className = 'scopeTag';
+    scopeTag.textContent = row.label;
+
+    rowEl.appendChild(deployBtn);
+    rowEl.appendChild(scopeTag);
+
+    const checks = document.createElement('div');
+    checks.className = 'sectionChecks';
+
+    availableAgents.forEach((agent) => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !!sectionTargetSelections[sectionKey][row.scope][agent];
+      checkbox.disabled = !row.enabled;
+      checkbox.onchange = () => {
+        sectionTargetSelections[sectionKey][row.scope][agent] = checkbox.checked;
+      };
+      label.appendChild(checkbox);
+      label.append(' ' + titleCase(agent));
+      checks.appendChild(label);
+    });
+
+    rowEl.appendChild(checks);
+    wrap.appendChild(rowEl);
+  });
+
+  return wrap;
+}
+
+function matchesRenderedAgent(path, agent) {
+  const p = String(path || '').toLowerCase();
+  if (agent === 'all') return true;
+  if (agent === 'orkestra') return p.includes('.orkestra/') || p.includes('orkestra');
+  if (agent === 'copilot') return p.includes('copilot') || p.includes('.github/');
+  if (agent === 'claude') return p.includes('claude');
+  if (agent === 'codex') return p.includes('agents.md') || p.includes('codex');
+  return false;
+}
+
+function applySourceCollapseUi() {
+  if (!sourceFileColumn || !filesGrid || !toggleSourceColBtn) return;
+  sourceFileColumn.dataset.collapsed = sourceCollapsed ? '1' : '0';
+  filesGrid.classList.toggle('sourceCollapsed', sourceCollapsed);
+  toggleSourceColBtn.textContent = sourceCollapsed ? 'Expand' : 'Collapse';
+  toggleSourceColBtn.title = sourceCollapsed ? 'Expand source column' : 'Collapse source column';
+  toggleSourceColBtn.setAttribute('aria-expanded', sourceCollapsed ? 'false' : 'true');
+}
+
+function startDevHotReload() {
+  setInterval(async () => {
+    try {
+      const payload = await apiGet('/api/dev-hash');
+      const nextHash = payload.hash || '';
+
+      if (!devHash) {
+        devHash = nextHash;
+        return;
+      }
+
+      if (nextHash !== devHash) {
+        setStatus('Change detected. Reloading UI ...');
+        window.location.reload();
+      }
+    } catch (_err) {
+      // Ignore transient failures during server restart while editing.
+    }
+  }, 1000);
+}
 
 function setStatus(msg) {
   statusEl.textContent = msg;
@@ -156,31 +305,56 @@ function renderInitForm(templates, agents) {
 
 function renderSourceColumn(data) {
   sourceColumn.innerHTML = '';
+  const availableAgents = (data.agents || []).slice();
 
-  const globalCard = document.createElement('details');
-  globalCard.className = 'templateCard';
-  globalCard.open = true;
+  const templateNames = (data.templatesSource || []).map((t) => t.name);
+  renderPills(
+    sourceFilters,
+    [{ value: 'all', label: 'All' }, { value: 'global', label: 'Global' }, ...templateNames.map((name) => ({ value: name, label: name }))],
+    sourceTemplateFilter,
+    (value) => {
+      sourceTemplateFilter = value;
+      renderSourceColumn(data);
+      setActiveButtons();
+    }
+  );
 
-  const globalSummary = document.createElement('summary');
-  globalSummary.className = 'templateSummary';
-  globalSummary.textContent = 'Global Instructions';
-  globalCard.appendChild(globalSummary);
+  const showGlobal = sourceTemplateFilter === 'all' || sourceTemplateFilter === 'global';
+  if (showGlobal) {
+    const globalCard = document.createElement('details');
+    globalCard.className = 'templateCard';
+    globalCard.open = true;
 
-  const globalList = document.createElement('ul');
-  (data.globalSource || []).forEach((name) => {
-    addFileButton(globalList, { location: 'source', path: 'instructions/global/' + name });
-  });
-  if (!globalList.children.length) {
-    globalCard.appendChild(createEmptyMessage('No source global files.'));
-  } else {
-    globalCard.appendChild(globalList);
+    const globalSummary = document.createElement('summary');
+    globalSummary.className = 'templateSummary';
+    globalSummary.textContent = 'Global Instructions';
+    globalCard.appendChild(globalSummary);
+
+    const globalList = document.createElement('ul');
+    (data.globalSource || []).forEach((name) => {
+      addFileButton(globalList, { location: 'source', path: 'instructions/global/' + name });
+    });
+    if (!globalList.children.length) {
+      globalCard.appendChild(createEmptyMessage('No source global files.'));
+    } else {
+      globalCard.appendChild(
+        createSectionDeployControls(
+          'source:global',
+          (data.globalSource || []).map((name) => 'instructions/global/' + name),
+          availableAgents
+        )
+      );
+      globalCard.appendChild(globalList);
+    }
+    sourceColumn.appendChild(globalCard);
   }
-  sourceColumn.appendChild(globalCard);
 
   (data.templatesSource || []).forEach((t) => {
+    if (sourceTemplateFilter !== 'all' && sourceTemplateFilter !== t.name) return;
+
     const card = document.createElement('details');
     card.className = 'templateCard';
-    card.open = false;
+    card.open = sourceTemplateFilter === t.name;
 
     const summary = document.createElement('summary');
     summary.className = 'templateSummary';
@@ -192,23 +366,48 @@ function renderSourceColumn(data) {
     top.appendChild(fileButton({ location: 'source', path: t.templateYaml }));
     card.appendChild(top);
 
+    const sectionPaths = [];
+    sectionPaths.push(t.templateYaml);
+
     const order = ['Planning', 'Coding', 'Review', 'Other'];
     const ul = document.createElement('ul');
     order.forEach((cat) => {
       const files = t.instructionsByCategory[cat] || [];
       files.forEach((filename) => {
-        addFileButton(ul, { location: 'source', path: sourcePathForTemplateInstruction(t.name, filename) });
+        const path = sourcePathForTemplateInstruction(t.name, filename);
+        sectionPaths.push(path);
+        addFileButton(ul, { location: 'source', path });
       });
     });
 
     if (!ul.children.length) {
       card.appendChild(createEmptyMessage('No template instruction files.'));
     } else {
+      card.appendChild(createSectionDeployControls('source:template:' + t.name, sectionPaths, availableAgents));
       card.appendChild(ul);
     }
 
     sourceColumn.appendChild(card);
   });
+}
+
+async function deploySection(destination, sourcePaths, agents) {
+  try {
+    setStatus('Deploying selected section to ' + destination + ' ...');
+    const result = await apiPost('/api/deploy-section', {
+      destination,
+      sourcePaths,
+      agents,
+    });
+
+    output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
+    copyOutputBtn.disabled = !output.value;
+    setStatus('Section deploy finished');
+    await loadIndex();
+  } catch (err) {
+    setStatus('Section deploy failed');
+    alert('Section deploy failed: ' + err.message);
+  }
 }
 
 function renderGlobalColumn(data) {
@@ -218,15 +417,29 @@ function renderGlobalColumn(data) {
 
   const byAgent = data.globalByAgent || {};
   const agents = Object.keys(byAgent).sort();
+
+  renderPills(
+    globalFilters,
+    [{ value: 'all', label: 'All' }, ...agents.map((agent) => ({ value: agent, label: titleCase(agent) }))],
+    globalAgentFilter,
+    (value) => {
+      globalAgentFilter = value;
+      renderGlobalColumn(data);
+      setActiveButtons();
+    }
+  );
+
   if (!agents.length) {
     globalColumn.appendChild(createEmptyMessage('No global files found.'));
     return;
   }
 
   agents.forEach((agent) => {
+    if (globalAgentFilter !== 'all' && globalAgentFilter !== agent) return;
+
     const card = document.createElement('details');
     card.className = 'templateCard';
-    card.open = agent === 'orkestra';
+    card.open = globalAgentFilter === 'all' ? agent === 'orkestra' : true;
 
     const summary = document.createElement('summary');
     summary.className = 'templateSummary';
@@ -251,6 +464,19 @@ function renderGlobalColumn(data) {
 function renderRenderedColumn(data) {
   renderedColumn.innerHTML = '';
 
+  const renderedAgentOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'claude', label: 'Claude' },
+    { value: 'codex', label: 'Codex' },
+    { value: 'copilot', label: 'Copilot' },
+    { value: 'orkestra', label: 'Orkestra' },
+  ];
+  renderPills(renderedFilters, renderedAgentOptions, renderedAgentFilter, (value) => {
+    renderedAgentFilter = value;
+    renderRenderedColumn(data);
+    setActiveButtons();
+  });
+
   if (!data.renderedAvailable) {
     renderedColumn.appendChild(createEmptyMessage('Project is not initialized yet.'));
     return;
@@ -267,7 +493,10 @@ function renderRenderedColumn(data) {
 
   const globalList = document.createElement('ul');
   (data.globalRendered || []).forEach((name) => {
-    addFileButton(globalList, { location: 'rendered', path: renderedPathForGlobalInstruction(name) });
+    const path = renderedPathForGlobalInstruction(name);
+    if (matchesRenderedAgent(path, renderedAgentFilter)) {
+      addFileButton(globalList, { location: 'rendered', path });
+    }
   });
   if (!globalList.children.length) {
     globalCard.appendChild(createEmptyMessage('No rendered global files.'));
@@ -296,7 +525,10 @@ function renderRenderedColumn(data) {
   order.forEach((cat) => {
     const files = renderedTemplate.instructionsByCategory[cat] || [];
     files.forEach((filename) => {
-      addFileButton(ul, { location: 'rendered', path: renderedPathForTemplateInstruction(filename) });
+      const path = renderedPathForTemplateInstruction(filename);
+      if (matchesRenderedAgent(path, renderedAgentFilter)) {
+        addFileButton(ul, { location: 'rendered', path });
+      }
     });
   });
 
@@ -726,6 +958,13 @@ deployBtn.onclick = async () => {
 
 refreshBtn.onclick = loadIndex;
 
+if (toggleSourceColBtn) {
+  toggleSourceColBtn.onclick = () => {
+    sourceCollapsed = !sourceCollapsed;
+    applySourceCollapseUi();
+  };
+}
+
 compareToggle.addEventListener('change', () => {
   if (!compareToggle.checked) {
     compareArmed = false;
@@ -764,3 +1003,5 @@ rightEditor.addEventListener('input', () => {
 });
 
 loadIndex();
+applySourceCollapseUi();
+startDevHotReload();

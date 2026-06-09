@@ -15,19 +15,25 @@
   <main class="layout">
     <section class="topRow">
       <section class="panel filesPanel">
-        <div class="filesGrid">
-          <section class="fileColumn">
-            <h2>A: Source (Orkestra)</h2>
-            <div id="sourceColumn"></div>
+        <div class="filesGrid" id="filesGrid">
+          <section class="fileColumn sourceColumn" id="sourceFileColumn">
+            <div class="columnHead">
+              <h2>A: Source (Orkestra)</h2>
+              <button id="toggleSourceColBtn" class="ghostBtn" title="Collapse source column" aria-expanded="true">Collapse</button>
+            </div>
+            <div class="quickFilters" id="sourceFilters"></div>
+            <div id="sourceColumn" class="sourceContent"></div>
           </section>
 
           <section class="fileColumn">
             <h2>B: Global</h2>
+            <div class="quickFilters" id="globalFilters"></div>
             <div id="globalColumn"></div>
           </section>
 
           <section class="fileColumn">
             <h2>C: Rendered</h2>
+            <div class="quickFilters" id="renderedFilters"></div>
             <div id="renderedColumn"></div>
           </section>
         </div>
