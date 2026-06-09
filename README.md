@@ -42,17 +42,75 @@ cd orkestra
 
 ### Initialize a New Project
 
-Once installed, navigate to your project directory and run the initialization script:
+Once installed, navigate to your project directory and run:
 
 ```bash
 mkdir my-new-project
 cd my-new-project
-init-orkestra
+orkestra init
 ```
 
 Follow the interactive prompts to:
-1. Select a project flavor (e.g., Python Flask, HTML/JS).
-2. Initialize a Git repository (optional).
+1. Select a project template (e.g. Python Flask, HTML/JS).
+2. Pick which AI coding agents to support (Copilot, Claude, Codex, …).
+3. Initialize a Git repository (optional).
+
+Or skip the wizard with flags:
+
+```bash
+orkestra init --template python-flask --agents copilot,claude --here -y
+```
+
+## CLI
+
+```
+orkestra                              interactive top-level menu
+orkestra init        [--template T] [--agents a,b,c] [--here|--dir N] [-y]
+orkestra render      [--agent a] [--dry-run]
+orkestra list        templates|agents
+orkestra add-agent    <name>
+orkestra remove-agent <name>
+orkestra add-template <name>
+orkestra update      [--check]
+orkestra suggest     <url|path> [--apply]
+orkestra doctor
+orkestra version
+```
+
+Global flags: `-y/--yes`, `--quiet`, `--dry-run`.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model (sources →
+adapters → targets, manifest format, supervisor instruction).
+
+## WebUI Global Mode Settings
+
+The WebUI `Global` mode reads files from a small set of common locations only.
+It does not recursively scan your whole home directory.
+
+Default locations are defined in `settings/global-locations.yaml`:
+
+- `global_locations`: common folders (top-level files only)
+- `global_files`: exact file paths
+
+You can override these defaults per machine in:
+
+- `~/.config/orkestra/settings.yaml`
+
+Example:
+
+```yaml
+global_locations:
+    claude:
+        - ~/.claude
+    copilot:
+        - ~/.github
+
+global_files:
+    codex:
+        - ~/AGENTS.md
+    copilot:
+        - ~/.github/copilot-instructions.md
+```
 
 ## Usage
 
@@ -81,43 +139,28 @@ rm -f .orkestra/state.json && echo '{"current_step_index": 0, "previous_output":
 
 ## Structure
 
-This repository contains the framework source code and flavor definitions.
-
 ```
-.orkestra/
-├── flavors/                     # Project templates
-│   ├── python-flask/            # Example flavor
-│   │   ├── config.yaml          # Flavor-specific config
-│   │   ├── flow.yaml            # Flavor-specific workflow
-│   │   └── instructions/        # Flavor-specific instructions
-│   └── [other-flavors]/
-├── scripts/                     # Shared utility scripts
-│   └── run_sub_agent.sh
-└── state.json                   # Local state (for dev/testing)
-
-bin/
-└── init-orkestra.sh             # Initialization script
-
-.github/
-└── copilot-instructions.md      # Global Copilot instructions
-
-.vscode/
-└── tasks.json                   # VS Code tasks
+~/.orkestra/                     # distribution
+├── bin/orkestra                 # CLI entrypoint
+├── lib/{cli,ui,core}/           # subcommands + helpers
+├── adapters/{copilot,claude,codex,generic}/
+├── instructions/global/         # universal sources rendered for every project
+├── templates/                   # project templates (python-flask, html-js, …)
+└── ARCHITECTURE.md
 ```
 
-## Flavors & Initialization
+After `orkestra init`, your project gets:
 
-Orkestra uses "flavors" to define project-specific workflows. Each flavor (located in `.orkestra/flavors/`) contains its own:
-- `flow.yaml`: The workflow steps and rules.
-- `config.yaml`: Configuration for sub-agents and tools.
-- `instructions/`: Markdown files with role-specific prompts.
+```
+my-project/
+├── .orkestra/                   # manifest, flow, state, config, outputs
+├── .github/copilot-instructions.md   # if 'copilot' enabled
+├── CLAUDE.md, .claude/          # if 'claude' enabled
+└── AGENTS.md                    # if 'codex' enabled
+```
 
-When you run `bin/init-orkestra.sh` in a new project:
-1. You select a flavor (e.g., `python-flask`).
-2. The script copies that flavor's `flow.yaml`, `config.yaml`, and `instructions/` into your project's `.orkestra/` directory.
-3. It also installs the shared `scripts/` and `.github/copilot-instructions.md`.
-
-This ensures that every project has a self-contained configuration tailored to its technology stack.
+Generated files carry a `<!-- orkestra:generated … -->` marker. Edit the
+**sources** in `~/.orkestra/`, then run `orkestra render`.
 
 Key points:
 - **Where defined:** Flavors are declared during `init-orkestra.sh` and referenced in `flow.yaml` or `config.yaml`.

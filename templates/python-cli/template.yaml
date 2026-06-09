@@ -1,0 +1,13 @@
+name: python-cli
+description: Python command-line tool
+extends: []
+
+instructions:
+  - planning.instructions.md
+  - coding.instructions.md
+  - review.instructions.md
+
+workflow: flow.yaml
+
+mcp: []
+skills: []

@@ -1,0 +1,13 @@
+name: html-js
+description: Static site / vanilla HTML + CSS + JS
+extends: []
+
+instructions:
+  - planning.instructions.md
+  - coding.instructions.md
+  - review.instructions.md
+
+workflow: flow.yaml
+
+mcp: []
+skills: []

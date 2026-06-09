@@ -1,0 +1,21 @@
+# Orkestra defaults for global agent locations.
+# Users can override/extend these in ~/.config/orkestra/settings.yaml
+
+global_locations:
+  claude:
+    - ~/.claude
+  codex:
+    - ~/.codex
+  copilot:
+    - ~/.github
+    - ~/Library/Application Support/Code/User/prompts
+
+global_files:
+  claude:
+    - ~/CLAUDE.md
+    - ~/.claude/CLAUDE.md
+  codex:
+    - ~/AGENTS.md
+    - ~/.codex/AGENTS.md
+  copilot:
+    - ~/.github/copilot-instructions.md

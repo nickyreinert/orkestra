@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Orkestra CLI entrypoint.
+set -euo pipefail
+
+# Resolve real path of this script (handles symlinks).
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ORK_HOME="$(cd -P "$(dirname "$SOURCE")/.." >/dev/null 2>&1 && pwd)"
+export ORK_HOME
+
+# shellcheck source=../lib/ui/colors.sh
+source "$ORK_HOME/lib/ui/colors.sh"
+# shellcheck source=../lib/ui/menu.sh
+source "$ORK_HOME/lib/ui/menu.sh"
+# shellcheck source=../lib/core/paths.sh
+source "$ORK_HOME/lib/core/paths.sh"
+# shellcheck source=../lib/core/manifest.sh
+source "$ORK_HOME/lib/core/manifest.sh"
+
+usage() {
+    cat <<EOF
+${ORK_BOLD}orkestra${ORK_NC} — orchestrate AI coding-agent guidance for any project
+
+${ORK_BOLD}USAGE${ORK_NC}
+  orkestra                           interactive top-level menu
+  orkestra <command> [options]
+
+${ORK_BOLD}COMMANDS${ORK_NC}
+  init        scaffold .orkestra/ + agent files in a project
+  render      re-render agent files from current sources
+  list        list templates|agents
+  add-agent   enable an agent in the current project
+  remove-agent disable an agent in the current project
+  add-template scaffold a new template in your user dir
+  update      pull latest distribution and re-render
+  suggest     diff a remote markdown URL against current sources
+  mcp         run Orkestra MCP server (stdio)
+  doctor      check installation & project health
+  version     print version
+
+${ORK_BOLD}GLOBAL FLAGS${ORK_NC}
+  -y, --yes        auto-confirm prompts
+      --quiet      minimal output
+      --dry-run    show what would change without writing
+  -h, --help       show this help
+
+${ORK_DIM}docs: $ORK_HOME/ARCHITECTURE.md${ORK_NC}
+EOF
+}
+
+# Parse global flags before the subcommand.
+ORK_DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -y|--yes)    export ORK_YES=1; shift ;;
+        --quiet)     export ORK_QUIET=1; shift ;;
+        --dry-run)   export ORK_DRY_RUN=1; shift ;;
+        -h|--help)   usage; exit 0 ;;
+        --)          shift; break ;;
+        -*)          break ;;  # let subcommand parse it
+        *)           break ;;
+    esac
+done
+
+cmd="${1:-}"
+shift || true
+
+interactive_menu() {
+    ork_header "Orkestra v$ORK_VERSION"
+    local choice
+    ork_menu "What do you want to do?" choice \
+        "Initialize a new project here" \
+        "Re-render agent files (current project)" \
+        "List available templates" \
+        "List available agents" \
+        "Run doctor checks" \
+        "Quit"
+    case "$choice" in
+        "Initialize a new project here") exec "$0" init ;;
+        "Re-render agent files (current project)") exec "$0" render ;;
+        "List available templates") exec "$0" list templates ;;
+        "List available agents")    exec "$0" list agents ;;
+        "Run doctor checks")        exec "$0" doctor ;;
+        *) exit 0 ;;
+    esac
+}
+
+case "$cmd" in
+    "")        interactive_menu ;;
+    init)      "$ORK_HOME/lib/cli/init.sh"      "$@" ;;
+    render)    "$ORK_HOME/lib/cli/render.sh"    "$@" ;;
+    list)      "$ORK_HOME/lib/cli/list.sh"      "$@" ;;
+    add-agent) "$ORK_HOME/lib/cli/add-agent.sh" "$@" ;;
+    remove-agent) "$ORK_HOME/lib/cli/remove-agent.sh" "$@" ;;
+    add-template) "$ORK_HOME/lib/cli/add-template.sh" "$@" ;;
+    update)    "$ORK_HOME/lib/cli/update.sh"    "$@" ;;
+    suggest)   "$ORK_HOME/lib/cli/suggest.sh"   "$@" ;;
+    mcp)       "$ORK_HOME/lib/cli/mcp.sh"       "$@" ;;
+    doctor)    "$ORK_HOME/lib/cli/doctor.sh"    "$@" ;;
+    version|-v|--version) printf "orkestra %s\n" "$ORK_VERSION" ;;
+    help|-h|--help) usage ;;
+    *)
+        ork_error "Unknown command: $cmd"
+        usage
+        exit 1
+        ;;
+esac

@@ -3,7 +3,7 @@
     "orkestra": {
       "command": "python3",
       "args": [
-        "${workspaceFolder}/tools/orkestra_mcp_server.py"
+        "/absolute/path/to/orkestra/tools/orkestra_mcp_server.py"
       ]
     }
   }

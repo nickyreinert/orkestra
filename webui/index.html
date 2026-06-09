@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orkestra Template Manager</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Orkestra</h1>
+    <div class="status" id="status">Ready</div>
+  </header>
+
+  <main class="layout">
+    <section class="topRow">
+      <section class="panel filesPanel">
+        <div class="filesGrid">
+          <section class="fileColumn">
+            <h2>A: Source (Orkestra)</h2>
+            <div id="sourceColumn"></div>
+          </section>
+
+          <section class="fileColumn">
+            <h2>B: Global</h2>
+            <div id="globalColumn"></div>
+          </section>
+
+          <section class="fileColumn">
+            <h2>C: Rendered</h2>
+            <div id="renderedColumn"></div>
+          </section>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel previewPanel">
+      <div class="deployBar">
+        <div class="deployGroup">
+          <label for="initTemplate" class="smallLabel">Template</label>
+          <select id="initTemplate"></select>
+        </div>
+        <div class="deployGroup">
+          <span class="smallLabel">Deploy Target</span>
+          <div class="targetSwitch" id="targetSwitch">
+            <label><input type="radio" name="deployTarget" value="project" checked> Current Project</label>
+            <label><input type="radio" name="deployTarget" value="global"> Global</label>
+          </div>
+        </div>
+        <div class="deployGroup grow">
+          <span class="smallLabel">Agents</span>
+          <div id="initAgents" class="checks"></div>
+        </div>
+        <div class="deployActions">
+          <button id="deployBtn">Deploy Template</button>
+          <button id="renderBtn">Re-render</button>
+          <button id="refreshBtn">Refresh</button>
+        </div>
+      </div>
+
+      <div class="projectContext">
+        <div class="small" id="projectPath">Project: -</div>
+        <div class="small" id="projectState">State: unknown</div>
+      </div>
+
+      <div class="editorHeader">
+        <div class="previewTitleWrap">
+          <strong id="currentPath">No file selected</strong>
+          <label class="compareToggle" id="compareToggleWrap" hidden><input type="checkbox" id="compareToggle"> Compare</label>
+        </div>
+        <div class="editorActions">
+          <button id="savePrimaryBtn" disabled>Save Left</button>
+          <button id="saveSecondaryBtn" disabled hidden>Save Right</button>
+          <button id="applyLeftToRightBtn" disabled hidden>Apply Left → Right</button>
+          <button id="applyRightToLeftBtn" disabled hidden>Apply Right → Left</button>
+          <button id="copyDiffBtn" disabled hidden>Copy Diff</button>
+          <button id="copyOutputBtn" disabled>Copy Output</button>
+        </div>
+      </div>
+
+      <div class="previewGrid" id="previewGrid">
+        <section class="previewCol">
+          <div class="previewColHead">
+            <span id="leftMeta">Preview: -</span>
+          </div>
+          <textarea id="leftEditor" spellcheck="false" placeholder="Select a file pill above..."></textarea>
+        </section>
+
+        <section class="previewCol" id="rightCol" hidden>
+          <div class="previewColHead">
+            <span id="rightMeta">Right: -</span>
+          </div>
+          <textarea id="rightEditor" spellcheck="false" placeholder="Compare target will appear here..."></textarea>
+        </section>
+      </div>
+
+      <div class="editorHeader" id="diffHeader" hidden>
+        <strong>Diff</strong>
+      </div>
+      <div id="diffVisual" class="diffVisual" hidden></div>
+      <textarea id="diffOutput" spellcheck="false" placeholder="Enable compare mode, then select a second file from another column." readonly hidden></textarea>
+
+      <div class="editorHeader">
+        <strong>Output</strong>
+      </div>
+      <textarea id="output" spellcheck="false" placeholder="Action output appears here..." readonly></textarea>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

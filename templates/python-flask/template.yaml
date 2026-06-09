@@ -1,0 +1,13 @@
+name: python-flask
+description: Python Flask web app (backend + minimal frontend)
+extends: []
+
+instructions:
+  - planning.instructions.md
+  - coding.instructions.md
+  - review.instructions.md
+
+workflow: flow.yaml
+
+mcp: []
+skills: []
