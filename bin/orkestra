@@ -32,6 +32,7 @@ ${ORK_BOLD}USAGE${ORK_NC}
 ${ORK_BOLD}COMMANDS${ORK_NC}
   init        scaffold .orkestra/ + agent files in a project
   render      re-render agent files from current sources
+    webui       run Orkestra WebUI server
   list        list templates|agents
   add-agent   enable an agent in the current project
   remove-agent disable an agent in the current project
@@ -75,6 +76,7 @@ interactive_menu() {
     ork_menu "What do you want to do?" choice \
         "Initialize a new project here" \
         "Re-render agent files (current project)" \
+        "Start WebUI (current project)" \
         "List available templates" \
         "List available agents" \
         "Run doctor checks" \
@@ -82,6 +84,7 @@ interactive_menu() {
     case "$choice" in
         "Initialize a new project here") exec "$0" init ;;
         "Re-render agent files (current project)") exec "$0" render ;;
+        "Start WebUI (current project)") exec "$0" webui ;;
         "List available templates") exec "$0" list templates ;;
         "List available agents")    exec "$0" list agents ;;
         "Run doctor checks")        exec "$0" doctor ;;
@@ -100,6 +103,7 @@ case "$cmd" in
     update)    "$ORK_HOME/lib/cli/update.sh"    "$@" ;;
     suggest)   "$ORK_HOME/lib/cli/suggest.sh"   "$@" ;;
     mcp)       "$ORK_HOME/lib/cli/mcp.sh"       "$@" ;;
+    webui)     "$ORK_HOME/lib/cli/webui.sh"     "$@" ;;
     doctor)    "$ORK_HOME/lib/cli/doctor.sh"    "$@" ;;
     version|-v|--version) printf "orkestra %s\n" "$ORK_VERSION" ;;
     help|-h|--help) usage ;;

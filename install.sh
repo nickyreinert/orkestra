@@ -121,6 +121,7 @@ else
 fi
 
 BIN_DIR="$INSTALL_DIR/bin"
+ENTRYPOINT="$BIN_DIR/orkestra"
 
 # Ensure a callable 'orkestra' entrypoint exists.
 # If the checkout is still on legacy layout, bootstrap a thin wrapper.
@@ -149,10 +150,30 @@ EOF
     fi
 fi
 
-chmod +x "$BIN_DIR/orkestra"
+chmod +x "$ENTRYPOINT"
 chmod +x "$INSTALL_DIR"/lib/cli/*.sh           2>/dev/null || true
 chmod +x "$INSTALL_DIR"/lib/scripts/*.sh       2>/dev/null || true
 chmod +x "$INSTALL_DIR"/adapters/*/adapter.sh  2>/dev/null || true
+
+# Create a real CLI command via symlink in a common bin location.
+CLI_LINK_TARGET=""
+for candidate in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
+    parent_dir="$candidate"
+
+    # Create user-local dirs automatically; system dirs only if they already exist.
+    if [[ "$candidate" == "$HOME/.local/bin" ]] || [[ "$candidate" == "$HOME/bin" ]]; then
+        mkdir -p "$candidate"
+    elif [ ! -d "$candidate" ]; then
+        continue
+    fi
+
+    if [ -w "$candidate" ] || { [ -e "$candidate/orkestra" ] && [ -w "$candidate/orkestra" ]; }; then
+        ln -sfn "$ENTRYPOINT" "$candidate/orkestra"
+        CLI_LINK_TARGET="$candidate"
+        echo "Linked CLI command: $candidate/orkestra -> $ENTRYPOINT"
+        break
+    fi
+done
 
 # Detect shell config file
 SHELL_CONFIG=""
@@ -194,14 +215,19 @@ if [ ! -f "$SHELL_CONFIG" ]; then
     touch "$SHELL_CONFIG"
 fi
 
-# Check if already in path
-if grep -q "$BIN_DIR" "$SHELL_CONFIG"; then
-    echo "Orkestra is already in your PATH in $SHELL_CONFIG"
+# Ensure whichever location holds the callable command is on PATH.
+PATH_ENTRY="$BIN_DIR"
+if [ -n "$CLI_LINK_TARGET" ]; then
+    PATH_ENTRY="$CLI_LINK_TARGET"
+fi
+
+if grep -q "$PATH_ENTRY" "$SHELL_CONFIG"; then
+    echo "Orkestra command path is already in PATH in $SHELL_CONFIG"
 else
     echo "" >> "$SHELL_CONFIG"
     echo "# Orkestra CLI" >> "$SHELL_CONFIG"
-    echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$SHELL_CONFIG"
-    echo "Added Orkestra to PATH in $SHELL_CONFIG"
+    echo "export PATH=\"\$PATH:$PATH_ENTRY\"" >> "$SHELL_CONFIG"
+    echo "Added Orkestra command path to PATH in $SHELL_CONFIG"
 fi
 
 echo "Installation complete!"

@@ -73,6 +73,7 @@ orkestra remove-agent <name>
 orkestra add-template <name>
 orkestra update      [--check]
 orkestra suggest     <url|path> [--apply]
+orkestra webui       [--host 127.0.0.1] [--port 8732]
 orkestra doctor
 orkestra version
 ```

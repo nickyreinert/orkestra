@@ -19,8 +19,8 @@ PROJECT_DIR = Path.cwd()
 HOME_DIR = Path.home()
 DEFAULT_GLOBAL_SETTINGS_PATH = ROOT / "settings" / "global-locations.yaml"
 USER_GLOBAL_SETTINGS_PATH = HOME_DIR / ".config" / "orkestra" / "settings.yaml"
-HOST = "127.0.0.1"
-PORT = 8732
+HOST = os.environ.get("ORKESTRA_WEBUI_HOST", "127.0.0.1")
+PORT = int(os.environ.get("ORKESTRA_WEBUI_PORT", "8732"))
 
 
 def safe_name(value: str) -> bool:
