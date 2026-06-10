@@ -314,6 +314,29 @@ select {
   flex: 1;
 }
 
+.globalCategoryCard {
+  padding-top: 6px;
+}
+
+.globalAgentRow {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 6px;
+}
+
+.globalAgentLabel {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  padding-top: 6px;
+}
+
+.globalInstructionList {
+  margin: 0;
+}
+
 .sectionDeploy {
   display: grid;
   gap: 4px;

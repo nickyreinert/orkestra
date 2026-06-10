@@ -226,6 +226,18 @@ function renderedPathForGlobalInstruction(filename) {
   return '.orkestra/instructions/global/' + filename;
 }
 
+function globalInstructionCategory(path, templateNames) {
+  const lower = String(path || '').toLowerCase();
+  if (lower.endsWith('.json')) return 'Config';
+  if (!lower.endsWith('.md')) return '';
+
+  for (const name of templateNames) {
+    if (lower.includes(name.toLowerCase())) return name;
+  }
+
+  return 'Global Instructions';
+}
+
 function fileButton(fileRef) {
   const btn = document.createElement('button');
   btn.className = 'fileBtn';
@@ -453,6 +465,7 @@ function renderGlobalColumn(data) {
 
   const byAgent = data.globalByAgent || {};
   const agents = Object.keys(byAgent).sort();
+  const templateNames = (data.templatesSource || []).map((t) => t.name);
 
   renderPills(
     globalFilters,
@@ -470,30 +483,56 @@ function renderGlobalColumn(data) {
     return;
   }
 
+  const grouped = {};
+  const categoryOrder = ['Global Instructions', ...templateNames, 'Config'];
+
   agents.forEach((agent) => {
     if (globalAgentFilter !== 'all' && globalAgentFilter !== agent) return;
-
-    const card = document.createElement('details');
-    card.className = 'templateCard';
-    card.open = globalAgentFilter === 'all' ? agent === 'orkestra' : true;
-
-    const summary = document.createElement('summary');
-    summary.className = 'templateSummary';
-    summary.textContent = agent;
-    card.appendChild(summary);
-
-    const ul = document.createElement('ul');
     (byAgent[agent] || []).forEach((path) => {
-      addFileButton(ul, { location: 'global', path });
+      const category = globalInstructionCategory(path, templateNames);
+      if (!category) return;
+      grouped[category] = grouped[category] || {};
+      grouped[category][agent] = grouped[category][agent] || [];
+      grouped[category][agent].push(path);
+    });
+  });
+
+  const presentCategories = categoryOrder.filter((cat) => grouped[cat] && Object.keys(grouped[cat]).length);
+  if (!presentCategories.length) {
+    globalColumn.appendChild(createEmptyMessage('No copied instruction files available in Global.'));
+    return;
+  }
+
+  presentCategories.forEach((category) => {
+    const catCard = document.createElement('section');
+    catCard.className = 'templateCard globalCategoryCard';
+
+    const catTitle = document.createElement('div');
+    catTitle.className = 'templateSummary';
+    catTitle.textContent = category;
+    catCard.appendChild(catTitle);
+
+    const agentMap = grouped[category] || {};
+    Object.keys(agentMap).sort().forEach((agent) => {
+      const row = document.createElement('div');
+      row.className = 'globalAgentRow';
+
+      const agentLabel = document.createElement('div');
+      agentLabel.className = 'globalAgentLabel';
+      agentLabel.textContent = titleCase(agent);
+      row.appendChild(agentLabel);
+
+      const ul = document.createElement('ul');
+      ul.className = 'globalInstructionList';
+      (agentMap[agent] || []).forEach((path) => {
+        addFileButton(ul, { location: 'global', path });
+      });
+      row.appendChild(ul);
+
+      catCard.appendChild(row);
     });
 
-    if (!ul.children.length) {
-      card.appendChild(createEmptyMessage('No files in this group.'));
-    } else {
-      card.appendChild(ul);
-    }
-
-    globalColumn.appendChild(card);
+    globalColumn.appendChild(catCard);
   });
 }
 
