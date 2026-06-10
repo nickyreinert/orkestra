@@ -63,10 +63,6 @@ body {
   gap: 8px;
 }
 
-.filesGrid.sourceCollapsed {
-  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr);
-}
-
 .fileColumn {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -83,19 +79,11 @@ body {
   gap: 8px;
 }
 
-.ghostBtn {
-  border: 1px solid var(--border);
-  background: #fff;
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.ghostBtn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+#sourceHeaderControls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
 }
 
 .fileColumn h2 {
@@ -127,33 +115,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   background: #e9f7f5;
-}
-
-.sourceColumn[data-collapsed="1"] .sourceContent {
-  display: none;
-}
-
-.sourceColumn[data-collapsed="1"] {
-  padding: 4px;
-  overflow: hidden;
-}
-
-.sourceColumn[data-collapsed="1"] .columnHead {
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 6px;
-}
-
-.sourceColumn[data-collapsed="1"] h2 {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  margin: 0;
-  letter-spacing: 0.1em;
-}
-
-.sourceColumn[data-collapsed="1"] .ghostBtn {
-  padding: 2px 6px;
 }
 
 .categoryCard {
@@ -257,7 +218,9 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 8px;
+  margin-left: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .inlineDeployBtn {
@@ -318,23 +281,18 @@ select {
   padding-top: 6px;
 }
 
-.globalAgentRow {
-  display: grid;
-  grid-template-columns: 100px 1fr;
-  gap: 8px;
-  align-items: start;
-  margin-bottom: 6px;
+.globalCategoryCard > .templateSummary {
+  margin-bottom: 4px;
 }
 
-.globalAgentLabel {
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 700;
-  padding-top: 6px;
+.globalAgentCard {
+  margin: 4px 0 0 10px;
+  padding: 3px 5px 5px;
+  background: #fffdf8;
 }
 
 .globalInstructionList {
-  margin: 0;
+  margin: 0 0 0 8px;
 }
 
 .sectionDeploy {
@@ -661,21 +619,8 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .filesGrid.sourceCollapsed {
-    grid-template-columns: 1fr;
-  }
-
   .fileColumn {
     max-height: none;
-  }
-
-  .sourceColumn[data-collapsed="1"] .sourceContent {
-    display: block;
-  }
-
-  .sourceColumn[data-collapsed="1"] h2 {
-    writing-mode: horizontal-tb;
-    transform: none;
   }
 
   .previewGrid.compareMode {

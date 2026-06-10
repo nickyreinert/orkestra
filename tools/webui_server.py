@@ -975,9 +975,6 @@ class Handler(BaseHTTPRequestHandler):
                     target_file.write_text(bundle, encoding="utf-8")
                     written.append(str(target_file))
             else:
-                if not (PROJECT_DIR / ".orkestra").is_dir():
-                    return self._send_json({"error": "Project is not initialized (.orkestra missing)"}, status=400)
-
                 for agent in cleaned_agents:
                     target_file = project_target_for_agent(agent)
                     if target_file is None:

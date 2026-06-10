@@ -3,9 +3,7 @@ const globalColumn = document.getElementById('globalColumn');
 const renderedColumn = document.getElementById('renderedColumn');
 const globalFilters = document.getElementById('globalFilters');
 const renderedFilters = document.getElementById('renderedFilters');
-const filesGrid = document.getElementById('filesGrid');
-const sourceFileColumn = document.getElementById('sourceFileColumn');
-const toggleSourceColBtn = document.getElementById('toggleSourceColBtn');
+const sourceHeaderControls = document.getElementById('sourceHeaderControls');
 
 const leftEditor = document.getElementById('leftEditor');
 const rightEditor = document.getElementById('rightEditor');
@@ -40,7 +38,6 @@ let compareArmed = false;
 let currentDiffBlocks = [];
 let globalAgentFilter = 'all';
 let renderedAgentFilter = 'all';
-let sourceCollapsed = false;
 let devHash = null;
 const sourceDeployState = {
   agents: {},
@@ -135,15 +132,6 @@ function matchesRenderedAgent(path, agent) {
   if (agent === 'claude') return p.includes('claude');
   if (agent === 'codex') return p.includes('agents.md') || p.includes('codex');
   return false;
-}
-
-function applySourceCollapseUi() {
-  if (!sourceFileColumn || !filesGrid || !toggleSourceColBtn) return;
-  sourceFileColumn.dataset.collapsed = sourceCollapsed ? '1' : '0';
-  filesGrid.classList.toggle('sourceCollapsed', sourceCollapsed);
-  toggleSourceColBtn.textContent = sourceCollapsed ? 'Expand' : 'Collapse';
-  toggleSourceColBtn.title = sourceCollapsed ? 'Expand source column' : 'Collapse source column';
-  toggleSourceColBtn.setAttribute('aria-expanded', sourceCollapsed ? 'false' : 'true');
 }
 
 function startDevHotReload() {
@@ -265,6 +253,46 @@ function renderSourceColumn(data) {
   sourceColumn.innerHTML = '';
   ensureSourceDeployState(data);
 
+  if (sourceHeaderControls) {
+    sourceHeaderControls.innerHTML = '';
+    const inlineDeploy = document.createElement('span');
+    inlineDeploy.className = 'inlineDeployControls';
+
+    const deployGlobalBtn = document.createElement('button');
+    deployGlobalBtn.type = 'button';
+    deployGlobalBtn.className = 'inlineDeployBtn';
+    deployGlobalBtn.textContent = 'G';
+    deployGlobalBtn.title = 'Deploy selected source variants to global scope';
+    deployGlobalBtn.onclick = () => deploySectionFromTop('global');
+    inlineDeploy.appendChild(deployGlobalBtn);
+
+    const deployProjectBtn = document.createElement('button');
+    deployProjectBtn.type = 'button';
+    deployProjectBtn.className = 'inlineDeployBtn';
+    deployProjectBtn.textContent = 'P';
+    deployProjectBtn.title = 'Deploy selected source variants to project scope';
+    deployProjectBtn.onclick = () => deploySectionFromTop('project');
+    inlineDeploy.appendChild(deployProjectBtn);
+
+    const inlineAgents = document.createElement('span');
+    inlineAgents.className = 'inlineAgentChecks';
+    (data.agents || []).forEach((agent) => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !!sourceDeployState.agents[agent];
+      checkbox.onchange = () => {
+        sourceDeployState.agents[agent] = checkbox.checked;
+      };
+      label.appendChild(checkbox);
+      label.append(' ' + titleCase(agent));
+      inlineAgents.appendChild(label);
+    });
+
+    inlineDeploy.appendChild(inlineAgents);
+    sourceHeaderControls.appendChild(inlineDeploy);
+  }
+
   const globalCard = document.createElement('details');
   globalCard.className = 'templateCard';
   globalCard.open = true;
@@ -286,52 +314,6 @@ function renderSourceColumn(data) {
   globalSummaryRow.appendChild(globalHeaderCheck);
   globalSummaryRow.appendChild(globalLabel);
 
-  const inlineDeploy = document.createElement('span');
-  inlineDeploy.className = 'inlineDeployControls';
-
-  const deployGlobalBtn = document.createElement('button');
-  deployGlobalBtn.type = 'button';
-  deployGlobalBtn.className = 'inlineDeployBtn';
-  deployGlobalBtn.textContent = 'G';
-  deployGlobalBtn.title = 'Deploy selected source variants to global scope';
-  deployGlobalBtn.onclick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    deploySectionFromTop('global');
-  };
-  inlineDeploy.appendChild(deployGlobalBtn);
-
-  const deployProjectBtn = document.createElement('button');
-  deployProjectBtn.type = 'button';
-  deployProjectBtn.className = 'inlineDeployBtn';
-  deployProjectBtn.textContent = 'P';
-  deployProjectBtn.title = 'Deploy selected source variants to project scope';
-  deployProjectBtn.disabled = !data.renderedAvailable;
-  deployProjectBtn.onclick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    deploySectionFromTop('project');
-  };
-  inlineDeploy.appendChild(deployProjectBtn);
-
-  const inlineAgents = document.createElement('span');
-  inlineAgents.className = 'inlineAgentChecks';
-  (data.agents || []).forEach((agent) => {
-    const label = document.createElement('label');
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = !!sourceDeployState.agents[agent];
-    checkbox.onclick = (e) => e.stopPropagation();
-    checkbox.onchange = () => {
-      sourceDeployState.agents[agent] = checkbox.checked;
-    };
-    label.appendChild(checkbox);
-    label.append(' ' + titleCase(agent));
-    inlineAgents.appendChild(label);
-  });
-
-  inlineDeploy.appendChild(inlineAgents);
-  globalSummaryRow.appendChild(inlineDeploy);
   globalSummary.appendChild(globalSummaryRow);
   globalCard.appendChild(globalSummary);
 
@@ -428,6 +410,11 @@ function renderSourceColumn(data) {
 }
 
 async function deploySectionFromTop(destination) {
+  if (destination === 'project') {
+    const ok = window.confirm('Deploy to project scope? This can create or overwrite project-level instruction files in the current folder.');
+    if (!ok) return;
+  }
+
   const agents = selectedDeployAgents();
   if (!agents.length) {
     alert('Select at least one agent target at the top right first.');
@@ -504,32 +491,34 @@ function renderGlobalColumn(data) {
   }
 
   presentCategories.forEach((category) => {
-    const catCard = document.createElement('section');
+    const catCard = document.createElement('details');
     catCard.className = 'templateCard globalCategoryCard';
+    catCard.open = category === 'Global Instructions';
 
-    const catTitle = document.createElement('div');
-    catTitle.className = 'templateSummary';
-    catTitle.textContent = category;
-    catCard.appendChild(catTitle);
+    const catSummary = document.createElement('summary');
+    catSummary.className = 'templateSummary';
+    catSummary.textContent = category;
+    catCard.appendChild(catSummary);
 
     const agentMap = grouped[category] || {};
     Object.keys(agentMap).sort().forEach((agent) => {
-      const row = document.createElement('div');
-      row.className = 'globalAgentRow';
+      const agentCard = document.createElement('details');
+      agentCard.className = 'templateCard globalAgentCard';
+      agentCard.open = globalAgentFilter !== 'all';
 
-      const agentLabel = document.createElement('div');
-      agentLabel.className = 'globalAgentLabel';
-      agentLabel.textContent = titleCase(agent);
-      row.appendChild(agentLabel);
+      const agentSummary = document.createElement('summary');
+      agentSummary.className = 'templateSummary';
+      agentSummary.textContent = titleCase(agent);
+      agentCard.appendChild(agentSummary);
 
       const ul = document.createElement('ul');
       ul.className = 'globalInstructionList';
       (agentMap[agent] || []).forEach((path) => {
         addFileButton(ul, { location: 'global', path });
       });
-      row.appendChild(ul);
+      agentCard.appendChild(ul);
 
-      catCard.appendChild(row);
+      catCard.appendChild(agentCard);
     });
 
     globalColumn.appendChild(catCard);
@@ -977,13 +966,6 @@ copyDiffBtn.onclick = async () => {
   }
 };
 
-if (toggleSourceColBtn) {
-  toggleSourceColBtn.onclick = () => {
-    sourceCollapsed = !sourceCollapsed;
-    applySourceCollapseUi();
-  };
-}
-
 compareToggle.addEventListener('change', () => {
   if (!compareToggle.checked) {
     compareArmed = false;
@@ -1022,5 +1004,4 @@ rightEditor.addEventListener('input', () => {
 });
 
 loadIndex();
-applySourceCollapseUi();
 startDevHotReload();
