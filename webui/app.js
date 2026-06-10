@@ -1,7 +1,6 @@
 const sourceColumn = document.getElementById('sourceColumn');
 const globalColumn = document.getElementById('globalColumn');
 const renderedColumn = document.getElementById('renderedColumn');
-const sourceFilters = document.getElementById('sourceFilters');
 const globalFilters = document.getElementById('globalFilters');
 const renderedFilters = document.getElementById('renderedFilters');
 const filesGrid = document.getElementById('filesGrid');
@@ -26,12 +25,6 @@ const applyLeftToRightBtn = document.getElementById('applyLeftToRightBtn');
 const applyRightToLeftBtn = document.getElementById('applyRightToLeftBtn');
 const copyDiffBtn = document.getElementById('copyDiffBtn');
 const copyOutputBtn = document.getElementById('copyOutputBtn');
-const refreshBtn = document.getElementById('refreshBtn');
-const renderBtn = document.getElementById('renderBtn');
-const deployBtn = document.getElementById('deployBtn');
-
-const initTemplate = document.getElementById('initTemplate');
-const initAgents = document.getElementById('initAgents');
 
 const projectPathEl = document.getElementById('projectPath');
 const projectStateEl = document.getElementById('projectState');
@@ -45,12 +38,17 @@ let primary = null;
 let secondary = null;
 let compareArmed = false;
 let currentDiffBlocks = [];
-let sourceTemplateFilter = 'all';
 let globalAgentFilter = 'all';
 let renderedAgentFilter = 'all';
 let sourceCollapsed = false;
 let devHash = null;
-const sectionTargetSelections = {};
+const sourceDeployState = {
+  agents: {},
+  globalEnabled: false,
+  globalFiles: {},
+  activeTemplate: '',
+  templateFiles: {},
+};
 
 function titleCase(value) {
   if (!value) return value;
@@ -69,84 +67,64 @@ function renderPills(container, options, active, onPick) {
   });
 }
 
-function ensureSectionSelection(sectionKey, agents) {
-  if (!sectionTargetSelections[sectionKey]) {
-    sectionTargetSelections[sectionKey] = { global: {}, project: {} };
+function ensureSourceDeployState(data) {
+  const agents = (data.agents || []).slice();
+  agents.forEach((agent, idx) => {
+    if (typeof sourceDeployState.agents[agent] !== 'boolean') {
+      sourceDeployState.agents[agent] = idx === 0;
+    }
+  });
+
+  const templateNames = (data.templatesSource || []).map((t) => t.name);
+  if (!sourceDeployState.activeTemplate || !templateNames.includes(sourceDeployState.activeTemplate)) {
+    sourceDeployState.activeTemplate = templateNames[0] || '';
   }
-  const state = sectionTargetSelections[sectionKey];
-  ['global', 'project'].forEach((scope) => {
-    agents.forEach((agent) => {
-      if (typeof state[scope][agent] !== 'boolean') {
-        state[scope][agent] = false;
+
+  (data.globalSource || []).forEach((name) => {
+    const p = 'instructions/global/' + name;
+    if (typeof sourceDeployState.globalFiles[p] !== 'boolean') {
+      sourceDeployState.globalFiles[p] = true;
+    }
+  });
+
+  (data.templatesSource || []).forEach((tpl) => {
+    const paths = [tpl.templateYaml];
+    ['Planning', 'Coding', 'Review', 'Other'].forEach((cat) => {
+      (tpl.instructionsByCategory[cat] || []).forEach((filename) => {
+        paths.push(sourcePathForTemplateInstruction(tpl.name, filename));
+      });
+    });
+
+    sourceDeployState.templateFiles[tpl.name] = sourceDeployState.templateFiles[tpl.name] || {};
+    paths.forEach((p) => {
+      if (typeof sourceDeployState.templateFiles[tpl.name][p] !== 'boolean') {
+        sourceDeployState.templateFiles[tpl.name][p] = true;
       }
     });
   });
 }
 
-function selectedTargets(sectionKey, scope) {
-  const scopeState = (sectionTargetSelections[sectionKey] || {})[scope] || {};
-  return Object.keys(scopeState).filter((agent) => scopeState[agent]);
+function selectedDeployAgents() {
+  return Object.keys(sourceDeployState.agents).filter((agent) => sourceDeployState.agents[agent]);
 }
 
-function createSectionDeployControls(sectionKey, sourcePaths, availableAgents) {
-  ensureSectionSelection(sectionKey, availableAgents);
+function collectSelectedSourcePaths() {
+  const out = [];
 
-  const wrap = document.createElement('div');
-  wrap.className = 'sectionDeploy';
-
-  const projectAvailable = !!(latestIndex && latestIndex.renderedAvailable);
-  const rows = [
-    { scope: 'global', label: 'G', enabled: true },
-    { scope: 'project', label: 'P', enabled: projectAvailable },
-  ];
-
-  rows.forEach((row) => {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'sectionDeployRow';
-
-    const deployBtn = document.createElement('button');
-    deployBtn.className = 'sectionArrowBtn';
-    deployBtn.textContent = '\u2192';
-    deployBtn.title = `Deploy this section to ${row.scope}`;
-    deployBtn.disabled = !row.enabled;
-    deployBtn.onclick = async () => {
-      const targets = selectedTargets(sectionKey, row.scope);
-      if (!targets.length) {
-        alert(`Select at least one ${row.scope} target first.`);
-        return;
-      }
-      await deploySection(row.scope, sourcePaths, targets);
-    };
-
-    const scopeTag = document.createElement('span');
-    scopeTag.className = 'scopeTag';
-    scopeTag.textContent = row.label;
-
-    rowEl.appendChild(deployBtn);
-    rowEl.appendChild(scopeTag);
-
-    const checks = document.createElement('div');
-    checks.className = 'sectionChecks';
-
-    availableAgents.forEach((agent) => {
-      const label = document.createElement('label');
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = !!sectionTargetSelections[sectionKey][row.scope][agent];
-      checkbox.disabled = !row.enabled;
-      checkbox.onchange = () => {
-        sectionTargetSelections[sectionKey][row.scope][agent] = checkbox.checked;
-      };
-      label.appendChild(checkbox);
-      label.append(' ' + titleCase(agent));
-      checks.appendChild(label);
+  if (sourceDeployState.globalEnabled) {
+    Object.keys(sourceDeployState.globalFiles).forEach((path) => {
+      if (sourceDeployState.globalFiles[path]) out.push(path);
     });
+  }
 
-    rowEl.appendChild(checks);
-    wrap.appendChild(rowEl);
-  });
+  const tpl = sourceDeployState.activeTemplate;
+  if (tpl && sourceDeployState.templateFiles[tpl]) {
+    Object.keys(sourceDeployState.templateFiles[tpl]).forEach((path) => {
+      if (sourceDeployState.templateFiles[tpl][path]) out.push(path);
+    });
+  }
 
-  return wrap;
+  return out;
 }
 
 function matchesRenderedAgent(path, agent) {
@@ -214,16 +192,6 @@ function refLabel(fileRef) {
   return `${fileRef.location}: ${fileRef.path}`;
 }
 
-function selectedDeployTarget() {
-  const el = document.querySelector('input[name="deployTarget"]:checked');
-  return el ? el.value : 'project';
-}
-
-function inferTemplateFromSourcePath(path) {
-  const m = path.match(/^templates\/([^/]+)\//);
-  return m ? m[1] : null;
-}
-
 function shortPathLabel(relPath) {
   const globalPath = relPath.match(/^global\/[^/]+\/(.+)$/);
   if (globalPath) return globalPath[1];
@@ -281,119 +249,187 @@ function createEmptyMessage(text) {
   return div;
 }
 
-function renderInitForm(templates, agents) {
-  initTemplate.innerHTML = '';
-  templates.forEach((t) => {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = t.name;
-    initTemplate.appendChild(opt);
-  });
+function renderSourceColumn(data) {
+  sourceColumn.innerHTML = '';
+  ensureSourceDeployState(data);
 
-  initAgents.innerHTML = '';
-  agents.forEach((agent, index) => {
+  const globalCard = document.createElement('details');
+  globalCard.className = 'templateCard';
+  globalCard.open = true;
+
+  const globalSummary = document.createElement('summary');
+  globalSummary.className = 'templateSummary';
+
+  const globalSummaryRow = document.createElement('span');
+  globalSummaryRow.className = 'inlineSummaryRow';
+  const globalHeaderCheck = document.createElement('input');
+  globalHeaderCheck.type = 'checkbox';
+  globalHeaderCheck.checked = !!sourceDeployState.globalEnabled;
+  globalHeaderCheck.onclick = (e) => e.stopPropagation();
+  globalHeaderCheck.onchange = () => {
+    sourceDeployState.globalEnabled = globalHeaderCheck.checked;
+  };
+  const globalLabel = document.createElement('span');
+  globalLabel.textContent = 'Global Instructions';
+  globalSummaryRow.appendChild(globalHeaderCheck);
+  globalSummaryRow.appendChild(globalLabel);
+
+  const inlineDeploy = document.createElement('span');
+  inlineDeploy.className = 'inlineDeployControls';
+
+  const deployGlobalBtn = document.createElement('button');
+  deployGlobalBtn.type = 'button';
+  deployGlobalBtn.className = 'inlineDeployBtn';
+  deployGlobalBtn.textContent = 'G';
+  deployGlobalBtn.title = 'Deploy selected source variants to global scope';
+  deployGlobalBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    deploySectionFromTop('global');
+  };
+  inlineDeploy.appendChild(deployGlobalBtn);
+
+  const deployProjectBtn = document.createElement('button');
+  deployProjectBtn.type = 'button';
+  deployProjectBtn.className = 'inlineDeployBtn';
+  deployProjectBtn.textContent = 'P';
+  deployProjectBtn.title = 'Deploy selected source variants to project scope';
+  deployProjectBtn.disabled = !data.renderedAvailable;
+  deployProjectBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    deploySectionFromTop('project');
+  };
+  inlineDeploy.appendChild(deployProjectBtn);
+
+  const inlineAgents = document.createElement('span');
+  inlineAgents.className = 'inlineAgentChecks';
+  (data.agents || []).forEach((agent) => {
     const label = document.createElement('label');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.value = agent;
-    checkbox.checked = index === 0;
+    checkbox.checked = !!sourceDeployState.agents[agent];
+    checkbox.onclick = (e) => e.stopPropagation();
+    checkbox.onchange = () => {
+      sourceDeployState.agents[agent] = checkbox.checked;
+    };
     label.appendChild(checkbox);
-    label.append(' ' + agent);
-    initAgents.appendChild(label);
+    label.append(' ' + titleCase(agent));
+    inlineAgents.appendChild(label);
   });
-}
 
-function renderSourceColumn(data) {
-  sourceColumn.innerHTML = '';
-  const availableAgents = (data.agents || []).slice();
+  inlineDeploy.appendChild(inlineAgents);
+  globalSummaryRow.appendChild(inlineDeploy);
+  globalSummary.appendChild(globalSummaryRow);
+  globalCard.appendChild(globalSummary);
 
-  const templateNames = (data.templatesSource || []).map((t) => t.name);
-  renderPills(
-    sourceFilters,
-    [{ value: 'all', label: 'All' }, { value: 'global', label: 'Global' }, ...templateNames.map((name) => ({ value: name, label: name }))],
-    sourceTemplateFilter,
-    (value) => {
-      sourceTemplateFilter = value;
-      renderSourceColumn(data);
-      setActiveButtons();
-    }
-  );
+  const globalList = document.createElement('ul');
+  (data.globalSource || []).forEach((name) => {
+    const path = 'instructions/global/' + name;
+    const li = document.createElement('li');
+    li.className = 'sourceRow';
 
-  const showGlobal = sourceTemplateFilter === 'all' || sourceTemplateFilter === 'global';
-  if (showGlobal) {
-    const globalCard = document.createElement('details');
-    globalCard.className = 'templateCard';
-    globalCard.open = true;
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = !!sourceDeployState.globalFiles[path];
+    check.onchange = () => {
+      sourceDeployState.globalFiles[path] = check.checked;
+      if (!check.checked) {
+        sourceDeployState.globalEnabled = false;
+        renderSourceColumn(data);
+      }
+    };
 
-    const globalSummary = document.createElement('summary');
-    globalSummary.className = 'templateSummary';
-    globalSummary.textContent = 'Global Instructions';
-    globalCard.appendChild(globalSummary);
-
-    const globalList = document.createElement('ul');
-    (data.globalSource || []).forEach((name) => {
-      addFileButton(globalList, { location: 'source', path: 'instructions/global/' + name });
-    });
-    if (!globalList.children.length) {
-      globalCard.appendChild(createEmptyMessage('No source global files.'));
-    } else {
-      globalCard.appendChild(
-        createSectionDeployControls(
-          'source:global',
-          (data.globalSource || []).map((name) => 'instructions/global/' + name),
-          availableAgents
-        )
-      );
-      globalCard.appendChild(globalList);
-    }
-    sourceColumn.appendChild(globalCard);
+    const btn = fileButton({ location: 'source', path });
+    li.appendChild(check);
+    li.appendChild(btn);
+    globalList.appendChild(li);
+  });
+  if (!globalList.children.length) {
+    globalCard.appendChild(createEmptyMessage('No source global files.'));
+  } else {
+    globalCard.appendChild(globalList);
   }
+  sourceColumn.appendChild(globalCard);
 
   (data.templatesSource || []).forEach((t) => {
-    if (sourceTemplateFilter !== 'all' && sourceTemplateFilter !== t.name) return;
-
     const card = document.createElement('details');
     card.className = 'templateCard';
-    card.open = sourceTemplateFilter === t.name;
+    card.open = sourceDeployState.activeTemplate === t.name;
 
     const summary = document.createElement('summary');
     summary.className = 'templateSummary';
-    summary.textContent = t.name;
+    const summaryRow = document.createElement('span');
+    summaryRow.className = 'inlineSummaryRow';
+
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'sourceTemplateChoice';
+    radio.checked = sourceDeployState.activeTemplate === t.name;
+    radio.onclick = (e) => e.stopPropagation();
+    radio.onchange = () => {
+      sourceDeployState.activeTemplate = t.name;
+      renderSourceColumn(data);
+      setActiveButtons();
+    };
+
+    const title = document.createElement('span');
+    title.textContent = t.name;
+    summaryRow.appendChild(radio);
+    summaryRow.appendChild(title);
+    summary.appendChild(summaryRow);
     card.appendChild(summary);
 
-    const top = document.createElement('div');
-    top.className = 'templateBodyTop';
-    top.appendChild(fileButton({ location: 'source', path: t.templateYaml }));
-    card.appendChild(top);
-
-    const sectionPaths = [];
-    sectionPaths.push(t.templateYaml);
-
-    const order = ['Planning', 'Coding', 'Review', 'Other'];
-    const ul = document.createElement('ul');
-    order.forEach((cat) => {
-      const files = t.instructionsByCategory[cat] || [];
-      files.forEach((filename) => {
-        const path = sourcePathForTemplateInstruction(t.name, filename);
-        sectionPaths.push(path);
-        addFileButton(ul, { location: 'source', path });
+    const paths = [t.templateYaml];
+    ['Planning', 'Coding', 'Review', 'Other'].forEach((cat) => {
+      (t.instructionsByCategory[cat] || []).forEach((filename) => {
+        paths.push(sourcePathForTemplateInstruction(t.name, filename));
       });
+    });
+
+    const ul = document.createElement('ul');
+    paths.forEach((path) => {
+      const li = document.createElement('li');
+      li.className = 'sourceRow';
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      const templateState = sourceDeployState.templateFiles[t.name] || {};
+      check.checked = !!templateState[path];
+      check.onchange = () => {
+        sourceDeployState.templateFiles[t.name][path] = check.checked;
+      };
+
+      const btn = fileButton({ location: 'source', path });
+      li.appendChild(check);
+      li.appendChild(btn);
+      ul.appendChild(li);
     });
 
     if (!ul.children.length) {
       card.appendChild(createEmptyMessage('No template instruction files.'));
     } else {
-      card.appendChild(createSectionDeployControls('source:template:' + t.name, sectionPaths, availableAgents));
       card.appendChild(ul);
     }
-
     sourceColumn.appendChild(card);
   });
 }
 
-async function deploySection(destination, sourcePaths, agents) {
+async function deploySectionFromTop(destination) {
+  const agents = selectedDeployAgents();
+  if (!agents.length) {
+    alert('Select at least one agent target at the top right first.');
+    return;
+  }
+
+  const sourcePaths = collectSelectedSourcePaths();
+  if (!sourcePaths.length) {
+    alert('Select at least one source variant (header/file checkbox or active template file).');
+    return;
+  }
+
   try {
-    setStatus('Deploying selected section to ' + destination + ' ...');
+    setStatus('Deploying selected variants to ' + destination + ' ...');
     const result = await apiPost('/api/deploy-section', {
       destination,
       sourcePaths,
@@ -402,11 +438,11 @@ async function deploySection(destination, sourcePaths, agents) {
 
     output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
     copyOutputBtn.disabled = !output.value;
-    setStatus('Section deploy finished');
+    setStatus('Variant deploy finished');
     await loadIndex();
   } catch (err) {
-    setStatus('Section deploy failed');
-    alert('Section deploy failed: ' + err.message);
+    setStatus('Variant deploy failed');
+    alert('Variant deploy failed: ' + err.message);
   }
 }
 
@@ -754,13 +790,6 @@ async function handleFilePick(fileRef) {
     setStatus('Loading ' + fileRef.path + ' ...');
     const resolved = await readFileRef(fileRef);
 
-    if (resolved.location === 'source') {
-      const inferred = inferTemplateFromSourcePath(resolved.path);
-      if (inferred && [...initTemplate.options].some((o) => o.value === inferred)) {
-        initTemplate.value = inferred;
-      }
-    }
-
     if (compareToggle.checked && compareArmed && primary && resolved.location !== primary.location) {
       secondary = resolved;
       rightEditor.value = secondary.content;
@@ -818,8 +847,6 @@ async function loadIndex() {
     renderSourceColumn(data);
     renderGlobalColumn(data);
     renderRenderedColumn(data);
-    renderInitForm(data.templatesSource || [], data.agents || []);
-
     await loadContext();
     setActiveButtons();
     setStatus('Ready');
@@ -893,20 +920,6 @@ saveSecondaryBtn.onclick = () => saveSide('right');
 applyLeftToRightBtn.onclick = () => applyCopy('leftToRight');
 applyRightToLeftBtn.onclick = () => applyCopy('rightToLeft');
 
-renderBtn.onclick = async () => {
-  try {
-    setStatus('Re-rendering project ...');
-    const result = await apiPost('/api/render', {});
-    output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
-    copyOutputBtn.disabled = !output.value;
-    await loadIndex();
-    setStatus('Re-render finished');
-  } catch (err) {
-    setStatus('Render failed');
-    alert('Re-render failed: ' + err.message);
-  }
-};
-
 copyOutputBtn.onclick = async () => {
   try {
     await navigator.clipboard.writeText(output.value || '');
@@ -924,39 +937,6 @@ copyDiffBtn.onclick = async () => {
     alert('Clipboard copy failed.');
   }
 };
-
-deployBtn.onclick = async () => {
-  try {
-    const selectedAgents = [...initAgents.querySelectorAll('input[type="checkbox"]:checked')]
-      .map((el) => el.value);
-
-    if (!selectedAgents.length) {
-      alert('Select at least one agent.');
-      return;
-    }
-
-    const target = selectedDeployTarget();
-    setStatus('Deploying template to ' + target + ' ...');
-
-    const result = await apiPost('/api/deploy-template', {
-      template: initTemplate.value,
-      agents: selectedAgents,
-      target,
-    });
-
-    await loadContext();
-    output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
-    copyOutputBtn.disabled = !output.value;
-    setStatus('Deploy finished');
-    alert('Deploy complete.');
-    await loadIndex();
-  } catch (err) {
-    setStatus('Deploy failed');
-    alert('Deploy failed: ' + err.message);
-  }
-};
-
-refreshBtn.onclick = loadIndex;
 
 if (toggleSourceColBtn) {
   toggleSourceColBtn.onclick = () => {

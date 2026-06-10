@@ -129,8 +129,7 @@ body {
   background: #e9f7f5;
 }
 
-.sourceColumn[data-collapsed="1"] .sourceContent,
-.sourceColumn[data-collapsed="1"] #sourceFilters {
+.sourceColumn[data-collapsed="1"] .sourceContent {
   display: none;
 }
 
@@ -221,45 +220,6 @@ select {
   background: #fff;
 }
 
-.deployBar {
-  display: grid;
-  grid-template-columns: 220px 220px 1fr auto;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  background: #fff9ea;
-}
-
-.deployGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.deployGroup.grow {
-  min-width: 260px;
-}
-
-.targetSwitch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.targetSwitch label {
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: #fff;
-}
-
-.deployActions {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-}
-
 .projectContext {
   padding: 6px 10px 0;
 }
@@ -287,12 +247,71 @@ select {
   margin-bottom: 8px;
 }
 
+.inlineSummaryRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inlineDeployControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.inlineDeployBtn {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inlineDeployBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.inlineAgentChecks {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.inlineAgentChecks label {
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #fff;
+  color: var(--muted);
+}
+
 .templateCard[open] > .templateSummary {
   color: var(--accent);
 }
 
 .templateBodyTop {
   margin-bottom: 6px;
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sourceRow > input[type="checkbox"] {
+  margin: 0;
+}
+
+.sourceRow .fileBtn {
+  flex: 1;
 }
 
 .sectionDeploy {
@@ -363,8 +382,7 @@ select {
 }
 
 .actionsPanel button,
-.editorActions button,
-#refreshBtn {
+.editorActions button {
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
@@ -624,16 +642,11 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .deployBar {
-    grid-template-columns: 1fr;
-  }
-
   .fileColumn {
     max-height: none;
   }
 
-  .sourceColumn[data-collapsed="1"] .sourceContent,
-  .sourceColumn[data-collapsed="1"] #sourceFilters {
+  .sourceColumn[data-collapsed="1"] .sourceContent {
     display: block;
   }
 

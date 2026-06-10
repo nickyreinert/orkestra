@@ -21,7 +21,6 @@
               <h2>A: Source (Orkestra)</h2>
               <button id="toggleSourceColBtn" class="ghostBtn" title="Collapse source column" aria-expanded="true">Collapse</button>
             </div>
-            <div class="quickFilters" id="sourceFilters"></div>
             <div id="sourceColumn" class="sourceContent"></div>
           </section>
 
@@ -41,29 +40,6 @@
     </section>
 
     <section class="panel previewPanel">
-      <div class="deployBar">
-        <div class="deployGroup">
-          <label for="initTemplate" class="smallLabel">Template</label>
-          <select id="initTemplate"></select>
-        </div>
-        <div class="deployGroup">
-          <span class="smallLabel">Deploy Target</span>
-          <div class="targetSwitch" id="targetSwitch">
-            <label><input type="radio" name="deployTarget" value="project" checked> Current Project</label>
-            <label><input type="radio" name="deployTarget" value="global"> Global</label>
-          </div>
-        </div>
-        <div class="deployGroup grow">
-          <span class="smallLabel">Agents</span>
-          <div id="initAgents" class="checks"></div>
-        </div>
-        <div class="deployActions">
-          <button id="deployBtn">Deploy Template</button>
-          <button id="renderBtn">Re-render</button>
-          <button id="refreshBtn">Refresh</button>
-        </div>
-      </div>
-
       <div class="projectContext">
         <div class="small" id="projectPath">Project: -</div>
         <div class="small" id="projectState">State: unknown</div>
