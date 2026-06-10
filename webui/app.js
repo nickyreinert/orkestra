@@ -156,7 +156,7 @@ function startDevHotReload() {
 }
 
 function setStatus(msg) {
-  statusEl.textContent = msg;
+  if (statusEl) statusEl.textContent = msg;
 }
 
 async function apiGet(url) {
@@ -436,7 +436,7 @@ async function deploySectionFromTop(destination) {
     });
 
     output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
-    copyOutputBtn.disabled = !output.value;
+    if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
     setStatus('Variant deploy finished');
     await loadIndex();
   } catch (err) {
@@ -606,20 +606,20 @@ function renderRenderedColumn(data) {
 }
 
 function setButtonStates() {
-  const compareMode = compareToggle.checked;
+  const compareMode = !!(compareToggle && compareToggle.checked);
   const hasCompareTarget = compareMode && !!secondary;
   const leftWritable = !!primary && !primary.readOnly;
   const rightWritable = !!secondary && !secondary.readOnly;
 
-  savePrimaryBtn.disabled = !leftWritable;
-  saveSecondaryBtn.disabled = !hasCompareTarget || !rightWritable;
+  if (savePrimaryBtn) savePrimaryBtn.disabled = !leftWritable;
+  if (saveSecondaryBtn) saveSecondaryBtn.disabled = !hasCompareTarget || !rightWritable;
 
   const bothSelected = !!primary && !!secondary;
-  applyLeftToRightBtn.disabled = !hasCompareTarget || !(bothSelected && rightWritable);
-  applyRightToLeftBtn.disabled = !hasCompareTarget || !(bothSelected && leftWritable);
+  if (applyLeftToRightBtn) applyLeftToRightBtn.disabled = !hasCompareTarget || !(bothSelected && rightWritable);
+  if (applyRightToLeftBtn) applyRightToLeftBtn.disabled = !hasCompareTarget || !(bothSelected && leftWritable);
 
-  copyDiffBtn.disabled = !hasCompareTarget || !diffOutput.value;
-  copyOutputBtn.disabled = !output.value;
+  if (copyDiffBtn) copyDiffBtn.disabled = !hasCompareTarget || !diffOutput.value;
+  if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
 }
 
 function editorLines(text) {
@@ -737,38 +737,48 @@ function setActiveButtons() {
 }
 
 function renderSelectionMeta() {
-  leftMeta.textContent = 'Preview: ' + refLabel(primary);
-  rightMeta.textContent = 'Compare: ' + refLabel(secondary);
+  if (leftMeta) leftMeta.textContent = 'Preview: ' + refLabel(primary);
+  if (rightMeta) rightMeta.textContent = 'Compare: ' + refLabel(secondary);
 
-  if (primary) {
-    currentPathEl.textContent = refLabel(primary);
-  } else {
-    currentPathEl.textContent = 'No file selected';
+  if (currentPathEl) {
+    if (primary) {
+      currentPathEl.textContent = refLabel(primary);
+    } else {
+      currentPathEl.textContent = 'No file selected';
+    }
   }
 
   const hasPrimary = !!primary;
-  compareToggleWrap.hidden = !hasPrimary;
+  if (compareToggleWrap) compareToggleWrap.hidden = !hasPrimary;
 
-  const showRight = compareToggle.checked && !!secondary;
+  const showRight = !!(compareToggle && compareToggle.checked && secondary);
   rightCol.hidden = !showRight;
   rightCol.style.display = showRight ? 'flex' : 'none';
   previewGrid.classList.toggle('compareMode', showRight);
 
-  const showCompareUi = compareToggle.checked && !!secondary;
+  const showCompareUi = !!(compareToggle && compareToggle.checked && secondary);
   diffHeader.hidden = !showCompareUi;
   diffOutput.hidden = !showCompareUi;
   diffHeader.style.display = showCompareUi ? 'flex' : 'none';
   diffOutput.style.display = 'none';
   diffVisual.hidden = !showCompareUi;
   diffVisual.style.display = showCompareUi ? 'flex' : 'none';
-  saveSecondaryBtn.hidden = !showCompareUi;
-  applyLeftToRightBtn.hidden = !showCompareUi;
-  applyRightToLeftBtn.hidden = !showCompareUi;
-  copyDiffBtn.hidden = !showCompareUi;
-  saveSecondaryBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  applyLeftToRightBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  applyRightToLeftBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  copyDiffBtn.style.display = showCompareUi ? 'inline-block' : 'none';
+  if (saveSecondaryBtn) {
+    saveSecondaryBtn.hidden = !showCompareUi;
+    saveSecondaryBtn.style.display = showCompareUi ? 'inline-block' : 'none';
+  }
+  if (applyLeftToRightBtn) {
+    applyLeftToRightBtn.hidden = !showCompareUi;
+    applyLeftToRightBtn.style.display = showCompareUi ? 'inline-block' : 'none';
+  }
+  if (applyRightToLeftBtn) {
+    applyRightToLeftBtn.hidden = !showCompareUi;
+    applyRightToLeftBtn.style.display = showCompareUi ? 'inline-block' : 'none';
+  }
+  if (copyDiffBtn) {
+    copyDiffBtn.hidden = !showCompareUi;
+    copyDiffBtn.style.display = showCompareUi ? 'inline-block' : 'none';
+  }
 }
 
 async function readFileRef(fileRef) {
@@ -781,7 +791,7 @@ async function readFileRef(fileRef) {
 }
 
 async function refreshDiff() {
-  if (!compareToggle.checked || !primary || !secondary) {
+  if (!(compareToggle && compareToggle.checked) || !primary || !secondary) {
     diffOutput.value = '';
     renderSideBySideDiff([]);
     setButtonStates();
@@ -818,7 +828,7 @@ async function handleFilePick(fileRef) {
     setStatus('Loading ' + fileRef.path + ' ...');
     const resolved = await readFileRef(fileRef);
 
-    if (compareToggle.checked && compareArmed && primary && resolved.location !== primary.location) {
+    if (compareToggle && compareToggle.checked && compareArmed && primary && resolved.location !== primary.location) {
       secondary = resolved;
       rightEditor.value = secondary.content;
       rightEditor.readOnly = secondary.readOnly;
@@ -828,7 +838,7 @@ async function handleFilePick(fileRef) {
       primary = resolved;
       leftEditor.value = primary.content;
       leftEditor.readOnly = primary.readOnly;
-      if (!compareToggle.checked) {
+      if (!(compareToggle && compareToggle.checked)) {
         clearSecondary();
         diffOutput.value = '';
       }
@@ -846,8 +856,8 @@ async function handleFilePick(fileRef) {
 
 async function loadContext() {
   const ctx = await apiGet('/api/context');
-  projectPathEl.textContent = 'Project: ' + ctx.projectDir;
-  projectStateEl.textContent = 'State: ' + (ctx.initialized ? 'initialized' : 'not initialized');
+  if (projectPathEl) projectPathEl.textContent = 'Project: ' + ctx.projectDir;
+  if (projectStateEl) projectStateEl.textContent = 'State: ' + (ctx.initialized ? 'initialized' : 'not initialized');
 }
 
 async function loadIndex() {
@@ -861,7 +871,7 @@ async function loadIndex() {
   leftEditor.readOnly = true;
   diffOutput.value = '';
   output.value = '';
-  compareToggle.checked = false;
+  if (compareToggle) compareToggle.checked = false;
   compareArmed = false;
 
   renderSelectionMeta();
@@ -921,7 +931,7 @@ async function applyCopy(direction) {
     });
 
     output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim() || 'Applied successfully.';
-    copyOutputBtn.disabled = !output.value;
+    if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
 
     const updated = await readFileRef({ location: target.location, path: target.path });
     if (direction === 'leftToRight') {
@@ -942,52 +952,58 @@ async function applyCopy(direction) {
   }
 }
 
-savePrimaryBtn.onclick = () => saveSide('left');
-saveSecondaryBtn.onclick = () => saveSide('right');
+if (savePrimaryBtn) savePrimaryBtn.onclick = () => saveSide('left');
+if (saveSecondaryBtn) saveSecondaryBtn.onclick = () => saveSide('right');
 
-applyLeftToRightBtn.onclick = () => applyCopy('leftToRight');
-applyRightToLeftBtn.onclick = () => applyCopy('rightToLeft');
+if (applyLeftToRightBtn) applyLeftToRightBtn.onclick = () => applyCopy('leftToRight');
+if (applyRightToLeftBtn) applyRightToLeftBtn.onclick = () => applyCopy('rightToLeft');
 
-copyOutputBtn.onclick = async () => {
-  try {
-    await navigator.clipboard.writeText(output.value || '');
-    setStatus('Copied output');
-  } catch (_err) {
-    alert('Clipboard copy failed.');
-  }
-};
+if (copyOutputBtn) {
+  copyOutputBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(output.value || '');
+      setStatus('Copied output');
+    } catch (_err) {
+      alert('Clipboard copy failed.');
+    }
+  };
+}
 
-copyDiffBtn.onclick = async () => {
-  try {
-    await navigator.clipboard.writeText(diffOutput.value || '');
-    setStatus('Copied diff');
-  } catch (_err) {
-    alert('Clipboard copy failed.');
-  }
-};
+if (copyDiffBtn) {
+  copyDiffBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(diffOutput.value || '');
+      setStatus('Copied diff');
+    } catch (_err) {
+      alert('Clipboard copy failed.');
+    }
+  };
+}
 
-compareToggle.addEventListener('change', () => {
-  if (!compareToggle.checked) {
-    compareArmed = false;
-    clearSecondary();
-    diffOutput.value = '';
+if (compareToggle) {
+  compareToggle.addEventListener('change', () => {
+    if (!compareToggle.checked) {
+      compareArmed = false;
+      clearSecondary();
+      diffOutput.value = '';
+      renderSelectionMeta();
+      setActiveButtons();
+      setButtonStates();
+      return;
+    }
+
+    if (!primary) {
+      compareToggle.checked = false;
+      alert('Select a primary file first, then enable compare mode.');
+      return;
+    }
+
+    compareArmed = true;
+    setStatus('Compare mode enabled. Pick a second file from another column.');
     renderSelectionMeta();
-    setActiveButtons();
     setButtonStates();
-    return;
-  }
-
-  if (!primary) {
-    compareToggle.checked = false;
-    alert('Select a primary file first, then enable compare mode.');
-    return;
-  }
-
-  compareArmed = true;
-  setStatus('Compare mode enabled. Pick a second file from another column.');
-  renderSelectionMeta();
-  setButtonStates();
-});
+  });
+}
 
 leftEditor.addEventListener('input', () => {
   if (primary) {
