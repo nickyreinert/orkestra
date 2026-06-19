@@ -12,6 +12,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI_DIR = ROOT / "webui"
 TEMPLATES_DIR = ROOT / "templates"
@@ -20,6 +26,8 @@ PROJECT_DIR = Path.cwd()
 HOME_DIR = Path.home()
 DEFAULT_GLOBAL_SETTINGS_PATH = ROOT / "settings" / "global-locations.yaml"
 USER_GLOBAL_SETTINGS_PATH = HOME_DIR / ".config" / "orkestra" / "settings.yaml"
+DEFAULT_AGENTS_CONFIG_PATH = ROOT / "settings" / "agents-config.yaml"
+USER_AGENTS_CONFIG_PATH = HOME_DIR / ".config" / "orkestra" / "agents-config.yaml"
 HOST = os.environ.get("ORKESTRA_WEBUI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ORKESTRA_WEBUI_PORT", "8732"))
 AUTO_RELOAD_SERVER = os.environ.get("ORKESTRA_WEBUI_AUTO_RELOAD_SERVER", "1") == "1"
@@ -160,6 +168,127 @@ def collect_extras() -> list[dict]:
     return out
 
 
+def collect_project_items_with_status() -> dict:
+    """
+    Collect project-rendered items with git status information.
+    Returns items categorized by type and git status.
+    """
+    items: dict = {
+        "instructions": {"tracked": [], "gitignored": []},
+        "skills": {"tracked": [], "gitignored": []},
+        "mcp": {"tracked": [], "gitignored": []},
+        "workflows": {"tracked": [], "gitignored": []},
+        "plugins": {"tracked": [], "gitignored": []},
+    }
+    
+    if not (PROJECT_DIR / ".orkestra").is_dir():
+        return items
+    
+    # Collect instructions
+    instruction_bases = [
+        (PROJECT_DIR / ".orkestra" / "instructions" / "global", "global"),
+        (PROJECT_DIR / ".orkestra" / "instructions" / "template", "template"),
+    ]
+    for base, source_type in instruction_bases:
+        if base.exists():
+            for file in base.glob("*.md"):
+                if file.is_file():
+                    rel_path = str(file.relative_to(PROJECT_DIR))
+                    git_status = get_file_git_status(rel_path)
+                    item = {
+                        "path": rel_path,
+                        "name": file.name,
+                        "source": source_type,
+                        **git_status
+                    }
+                    category = "gitignored" if git_status["gitignored"] else "tracked"
+                    items["instructions"][category].append(item)
+    
+    # Collect agent-specific files (CLAUDE.md, AGENTS.md, etc.)
+    agent_files = [
+        "CLAUDE.md",
+        "AGENTS.md",
+        ".github/copilot-instructions.md",
+    ]
+    for agent_file in agent_files:
+        file_path = PROJECT_DIR / agent_file
+        if file_path.exists():
+            rel_path = agent_file
+            git_status = get_file_git_status(rel_path)
+            item = {
+                "path": rel_path,
+                "name": file_path.name,
+                "source": "agent",
+                **git_status
+            }
+            category = "gitignored" if git_status["gitignored"] else "tracked"
+            items["instructions"][category].append(item)
+    
+    # Collect .github/instructions/ files
+    github_instructions = PROJECT_DIR / ".github" / "instructions"
+    if github_instructions.exists():
+        for file in github_instructions.glob("*.md"):
+            if file.is_file():
+                rel_path = str(file.relative_to(PROJECT_DIR))
+                git_status = get_file_git_status(rel_path)
+                item = {
+                    "path": rel_path,
+                    "name": file.name,
+                    "source": "copilot",
+                    **git_status
+                }
+                category = "gitignored" if git_status["gitignored"] else "tracked"
+                items["instructions"][category].append(item)
+    
+    # Collect skills
+    skills_base = PROJECT_DIR / ".claude" / "skills"
+    if skills_base.exists():
+        for item_path in skills_base.iterdir():
+            if item_path.is_dir() or item_path.suffix == ".md":
+                rel_path = str(item_path.relative_to(PROJECT_DIR))
+                git_status = get_file_git_status(rel_path)
+                item = {
+                    "path": rel_path,
+                    "name": item_path.name,
+                    "isDir": item_path.is_dir(),
+                    **git_status
+                }
+                category = "gitignored" if git_status["gitignored"] else "tracked"
+                items["skills"][category].append(item)
+    
+    # Collect MCP configs
+    mcp_base = PROJECT_DIR / ".orkestra" / "mcp"
+    if mcp_base.exists():
+        for file in mcp_base.glob("*.json"):
+            if file.is_file():
+                rel_path = str(file.relative_to(PROJECT_DIR))
+                git_status = get_file_git_status(rel_path)
+                item = {
+                    "path": rel_path,
+                    "name": file.name,
+                    **git_status
+                }
+                category = "gitignored" if git_status["gitignored"] else "tracked"
+                items["mcp"][category].append(item)
+    
+    # Collect workflows
+    workflows_base = PROJECT_DIR / ".orkestra" / "workflows"
+    if workflows_base.exists():
+        for file in workflows_base.glob("*.yaml"):
+            if file.is_file():
+                rel_path = str(file.relative_to(PROJECT_DIR))
+                git_status = get_file_git_status(rel_path)
+                item = {
+                    "path": rel_path,
+                    "name": file.name,
+                    **git_status
+                }
+                category = "gitignored" if git_status["gitignored"] else "tracked"
+                items["workflows"][category].append(item)
+    
+    return items
+
+
 def parse_simple_yaml_lists(file_path: Path) -> dict[str, dict[str, list[str]]]:
     data: dict[str, dict[str, list[str]]] = {
         "global_locations": {},
@@ -210,6 +339,152 @@ def load_global_location_settings() -> dict[str, dict[str, list[str]]]:
             merged[section][agent] = list(values)
 
     return merged
+
+
+def parse_agents_config_yaml(file_path: Path) -> dict:
+    """
+    Parse agents-config.yaml using PyYAML if available, otherwise return empty dict.
+    """
+    if not file_path.exists():
+        return {}
+
+    if not HAS_YAML:
+        print("Warning: PyYAML not available, cannot parse agents-config.yaml", file=sys.stderr)
+        return {}
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            return config if isinstance(config, dict) else {}
+    except Exception as e:
+        print(f"Warning: Failed to parse {file_path}: {e}", file=sys.stderr)
+        return {}
+
+
+def validate_agents_config(config: dict) -> tuple[bool, list[str]]:
+    """Validate agents-config structure and return (is_valid, errors)."""
+    errors: list[str] = []
+    
+    if not config:
+        errors.append("Empty config")
+        return False, errors
+    
+    if "version" not in config or config["version"] < 1:
+        errors.append("Missing or invalid version")
+    
+    # Check agents
+    agents = config.get("agents", [])
+    if not agents:
+        errors.append("No agents defined")
+    else:
+        agent_ids = set()
+        for i, agent in enumerate(agents):
+            if not isinstance(agent, dict):
+                errors.append(f"Agent {i}: not a dict")
+                continue
+            if "id" not in agent:
+                errors.append(f"Agent {i}: missing 'id'")
+            elif agent["id"] in agent_ids:
+                errors.append(f"Agent {i}: duplicate id '{agent['id']}'")
+            else:
+                agent_ids.add(agent["id"])
+    
+    # Check item_types
+    item_types = config.get("item_types", [])
+    if not item_types:
+        errors.append("No item_types defined")
+    else:
+        item_type_ids = set()
+        for i, item_type in enumerate(item_types):
+            if not isinstance(item_type, dict):
+                errors.append(f"Item type {i}: not a dict")
+                continue
+            if "id" not in item_type:
+                errors.append(f"Item type {i}: missing 'id'")
+            elif item_type["id"] in item_type_ids:
+                errors.append(f"Item type {i}: duplicate id '{item_type['id']}'")
+            else:
+                item_type_ids.add(item_type["id"])
+    
+    # Check deployments
+    deployments = config.get("deployments", [])
+    if deployments:
+        deployment_ids = set()
+        valid_agents = {a.get("id") for a in agents if isinstance(a, dict) and "id" in a}
+        valid_agents.add("all")  # Special agent for agent-agnostic deployments
+        valid_item_types = {it.get("id") for it in item_types if isinstance(it, dict) and "id" in it}
+        
+        for i, deployment in enumerate(deployments):
+            if not isinstance(deployment, dict):
+                errors.append(f"Deployment {i}: not a dict")
+                continue
+            
+            dep_id = deployment.get("id")
+            if not dep_id:
+                errors.append(f"Deployment {i}: missing 'id'")
+            elif dep_id in deployment_ids:
+                errors.append(f"Deployment {i}: duplicate id '{dep_id}'")
+            else:
+                deployment_ids.add(dep_id)
+            
+            agent = deployment.get("agent")
+            if not agent:
+                errors.append(f"Deployment {dep_id}: missing 'agent'")
+            elif agent not in valid_agents:
+                errors.append(f"Deployment {dep_id}: invalid agent '{agent}'")
+            
+            item_type = deployment.get("item_type")
+            if not item_type:
+                errors.append(f"Deployment {dep_id}: missing 'item_type'")
+            elif item_type not in valid_item_types:
+                errors.append(f"Deployment {dep_id}: invalid item_type '{item_type}'")
+            
+            scope = deployment.get("scope")
+            if scope not in ("global", "project"):
+                errors.append(f"Deployment {dep_id}: invalid scope '{scope}'")
+            
+            strategy = deployment.get("strategy")
+            if strategy not in ("bundle", "copy_file", "copy_tree", "merge_json"):
+                errors.append(f"Deployment {dep_id}: unknown strategy '{strategy}'")
+    
+    return len(errors) == 0, errors
+
+
+def load_agents_config() -> dict:
+    """
+    Load agents config from default location, with optional user override.
+    Returns validated config or default minimal config on error.
+    """
+    # Try default config first
+    config = parse_agents_config_yaml(DEFAULT_AGENTS_CONFIG_PATH)
+    
+    # Apply user overrides if they exist
+    if USER_AGENTS_CONFIG_PATH.exists():
+        user_config = parse_agents_config_yaml(USER_AGENTS_CONFIG_PATH)
+        if user_config:
+            # For simplicity, user config completely replaces default
+            # (more sophisticated merge logic could be added later)
+            config = user_config
+    
+    # Validate
+    is_valid, errors = validate_agents_config(config)
+    if not is_valid:
+        print(f"Warning: agents-config validation failed: {errors}", file=sys.stderr)
+        # Return minimal fallback
+        return {
+            "version": 1,
+            "agents": [
+                {"id": "claude", "label": "Claude", "enabled": True},
+                {"id": "copilot", "label": "Copilot", "enabled": True},
+                {"id": "codex", "label": "Codex", "enabled": True},
+            ],
+            "item_types": [
+                {"id": "instructions", "label": "Instructions", "default_strategy": "bundle"},
+            ],
+            "deployments": []
+        }
+    
+    return config
 
 
 def build_global_agent_file_map() -> dict[str, dict[str, Path]]:
@@ -422,6 +697,28 @@ def compose_selected_sources_bundle(source_paths: list[str]) -> str:
     return ("\n\n---\n\n".join(sections)).strip() + "\n"
 
 
+def compose_selected_global_bundle(source_paths: list[str], agent: str) -> str:
+    global_map = build_global_agent_file_map()
+    flat = flatten_global_map(global_map)
+    prefix = f"global/{agent}/"
+
+    sections: list[str] = []
+    for rel in source_paths:
+        if not rel.startswith(prefix):
+            continue
+        candidate = flat.get(rel)
+        if candidate is None or not candidate.exists() or not candidate.is_file():
+            continue
+
+        title = rel[len(prefix):]
+        body = candidate.read_text(encoding="utf-8").strip()
+        sections.append(f"## Global: {title}\n\n{body}")
+
+    if not sections:
+        return ""
+    return ("\n\n---\n\n".join(sections)).strip() + "\n"
+
+
 def project_target_for_agent(agent: str) -> Path | None:
     mapping = {
         "claude": PROJECT_DIR / "CLAUDE.md",
@@ -448,6 +745,231 @@ def run_orkestra(args: list[str]) -> tuple[bool, int, str, str]:
         check=False,
     )
     return proc.returncode == 0, proc.returncode, proc.stdout, proc.stderr
+
+
+def is_git_repository() -> bool:
+    """Check if PROJECT_DIR is inside a git repository."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=str(PROJECT_DIR),
+            capture_output=True,
+            check=False,
+            timeout=2,
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
+def is_tracked_by_git(rel_path: str) -> bool:
+    """
+    Check if a file is tracked by git.
+    Returns False if not in a git repo or file is not tracked.
+    """
+    if not is_git_repository():
+        return False
+    
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", rel_path],
+            cwd=str(PROJECT_DIR),
+            capture_output=True,
+            check=False,
+            timeout=2,
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
+def is_gitignored(rel_path: str) -> bool:
+    """
+    Check if a path is gitignored.
+    Returns False if not in a git repo or path is not ignored.
+    """
+    if not is_git_repository():
+        # Fallback: check if path matches common gitignore patterns
+        path_str = rel_path.lower()
+        common_ignores = [".orkestra/tmp", "__pycache__", ".pyc", ".DS_Store", "node_modules"]
+        return any(pattern in path_str for pattern in common_ignores)
+    
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", rel_path],
+            cwd=str(PROJECT_DIR),
+            capture_output=True,
+            check=False,
+            timeout=2,
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
+def get_file_git_status(rel_path: str) -> dict:
+    """
+    Get git status information for a file.
+    Returns: {"tracked": bool, "gitignored": bool, "exists": bool}
+    """
+    full_path = PROJECT_DIR / rel_path
+    
+    return {
+        "tracked": is_tracked_by_git(rel_path),
+        "gitignored": is_gitignored(rel_path),
+        "exists": full_path.exists(),
+    }
+
+
+def expand_source_globs(globs: list[str], template: str = "") -> list[Path]:
+    """
+    Expand glob patterns from deployment config into actual file paths.
+    Supports {template} placeholder.
+    """
+    paths: list[Path] = []
+    for pattern in globs:
+        # Expand {template} placeholder
+        expanded_pattern = pattern.replace("{template}", template) if template else pattern
+        
+        # Handle home directory expansion
+        if expanded_pattern.startswith("~/"):
+            base = HOME_DIR
+            rel_pattern = expanded_pattern[2:]
+        else:
+            base = ROOT
+            rel_pattern = expanded_pattern
+        
+        # Simple glob expansion
+        pattern_parts = rel_pattern.split("/")
+        if "*" in rel_pattern:
+            # Use glob
+            matches = base.glob(rel_pattern)
+            paths.extend([p for p in matches if p.is_file()])
+        else:
+            # Direct path
+            candidate = base / rel_pattern
+            if candidate.exists() and candidate.is_file():
+                paths.append(candidate)
+    
+    return paths
+
+
+def deploy_bundle_strategy(sources: list[Path], target: Path, agent: str) -> tuple[bool, str]:
+    """
+    Bundle multiple source files into a single target file.
+    Used for agent instruction files like CLAUDE.md, AGENTS.md, copilot-instructions.md
+    """
+    try:
+        # Ensure target directory exists
+        target.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Compose bundle
+        sections: list[str] = []
+        for source_file in sources:
+            if source_file.exists() and source_file.is_file():
+                content = source_file.read_text(encoding="utf-8")
+                sections.append(f"<!-- source: {source_file.name} -->\n\n{content}")
+        
+        if not sections:
+            return False, "No source files found to bundle"
+        
+        bundle_content = "\n\n---\n\n".join(sections)
+        target.write_text(bundle_content, encoding="utf-8")
+        
+        return True, f"Bundled {len(sources)} files to {target}"
+    except Exception as e:
+        return False, f"Bundle failed: {e}"
+
+
+def deploy_copy_file_strategy(sources: list[Path], target: Path, agent: str) -> tuple[bool, str]:
+    """
+    Copy source files individually to target directory.
+    Used for workflows, individual MCP configs, individual instructions.
+    """
+    try:
+        # Target should be a directory
+        target.mkdir(parents=True, exist_ok=True)
+        
+        copied = 0
+        for source_file in sources:
+            if source_file.exists() and source_file.is_file():
+                dest_file = target / source_file.name
+                shutil.copy2(source_file, dest_file)
+                copied += 1
+        
+        if copied == 0:
+            return False, "No files found to copy"
+        
+        return True, f"Copied {copied} files to {target}"
+    except Exception as e:
+        return False, f"Copy failed: {e}"
+
+
+def deploy_copy_tree_strategy(sources: list[Path], target: Path, agent: str) -> tuple[bool, str]:
+    """
+    Copy entire directory trees.
+    Used for skills, plugins.
+    """
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        
+        copied = 0
+        for source_path in sources:
+            if source_path.is_dir():
+                # Copy entire directory
+                dest_dir = target / source_path.name
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
+                shutil.copytree(source_path, dest_dir)
+                copied += 1
+            elif source_path.is_file():
+                # Individual file - copy to target
+                shutil.copy2(source_path, target / source_path.name)
+                copied += 1
+        
+        if copied == 0:
+            return False, "No directories or files found to copy"
+        
+        return True, f"Copied {copied} items to {target}"
+    except Exception as e:
+        return False, f"Copy tree failed: {e}"
+
+
+def execute_deployment(deployment: dict, template: str = "") -> tuple[bool, str]:
+    """
+    Execute a single deployment based on config and strategy.
+    Returns (success, message)
+    """
+    strategy = deployment.get("strategy", "")
+    source_globs = deployment.get("source", [])
+    target_str = deployment.get("target", "")
+    agent = deployment.get("agent", "")
+    scope = deployment.get("scope", "")
+    
+    # Expand target path
+    target_expanded = target_str.replace("{template}", template) if template else target_str
+    if target_expanded.startswith("~/"):
+        target = HOME_DIR / target_expanded[2:]
+    elif scope == "project":
+        target = PROJECT_DIR / target_expanded
+    else:
+        target = Path(target_expanded).expanduser()
+    
+    # Expand source globs
+    sources = expand_source_globs(source_globs, template)
+    
+    if not sources:
+        return False, f"No source files matched patterns: {source_globs}"
+    
+    # Execute strategy
+    if strategy == "bundle":
+        return deploy_bundle_strategy(sources, target, agent)
+    elif strategy == "copy_file":
+        return deploy_copy_file_strategy(sources, target, agent)
+    elif strategy == "copy_tree":
+        return deploy_copy_tree_strategy(sources, target, agent)
+    else:
+        return False, f"Unknown deployment strategy: {strategy}"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -618,6 +1140,55 @@ class Handler(BaseHTTPRequestHandler):
                     "rendered": rendered_rel,
                     "available": available,
                     "diff": diff_text,
+                }
+            )
+
+        if path == "/api/agents-config":
+            config = load_agents_config()
+            return self._send_json(config)
+
+        if path == "/api/deploy-index":
+            # Collect everything needed for config-driven deployment UI
+            config = load_agents_config()
+            rendered_global_dir = PROJECT_DIR / ".orkestra" / "instructions" / "global"
+            global_map = build_global_agent_file_map()
+            
+            # Determine current project template if initialized
+            current_template = ""
+            manifest_file = PROJECT_DIR / ".orkestra" / "manifest.yaml"
+            if manifest_file.exists():
+                # Simple parse for template field
+                for line in manifest_file.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("template:"):
+                        current_template = line.split(":", 1)[1].strip()
+                        break
+            
+            # Collect project items with git status
+            project_items = collect_project_items_with_status()
+            
+            return self._send_json(
+                {
+                    "agents": config.get("agents", []),
+                    "itemTypes": config.get("item_types", []),
+                    "deployments": config.get("deployments", []),
+                    "project": {
+                        "path": str(PROJECT_DIR),
+                        "initialized": (PROJECT_DIR / ".orkestra").is_dir(),
+                        "template": current_template,
+                        "isGitRepo": is_git_repository(),
+                    },
+                    "projectItems": project_items,
+                    # Legacy compatibility - keep these for now
+                    "templatesSource": collect_templates(TEMPLATES_DIR),
+                    "templateRendered": collect_rendered_template(),
+                    "globalSource": collect_global_files(ROOT / "instructions" / "global"),
+                    "globalRendered": collect_global_files(rendered_global_dir),
+                    "globalByAgent": {
+                        agent: sorted(files.keys())
+                        for agent, files in global_map.items()
+                    },
+                    "extras": collect_extras(),
+                    "renderedAvailable": (PROJECT_DIR / ".orkestra").is_dir(),
                 }
             )
 
@@ -997,6 +1568,49 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
 
+        if parsed.path == "/api/apply-global-selection":
+            data = self._read_json()
+            destination = str(data.get("destination", "")).strip()
+            agent = str(data.get("agent", "")).strip()
+            source_paths = data.get("sourcePaths", [])
+
+            if destination not in {"global", "project"}:
+                return self._send_json({"error": "Invalid destination"}, status=400)
+            if not safe_name(agent):
+                return self._send_json({"error": "Invalid agent"}, status=400)
+            if not isinstance(source_paths, list) or not source_paths:
+                return self._send_json({"error": "Select at least one global item"}, status=400)
+
+            valid_agents = set(list_agents())
+            if agent not in valid_agents:
+                return self._send_json({"error": "Unknown agent"}, status=400)
+
+            cleaned_paths = [p.strip() for p in source_paths if isinstance(p, str) and p.strip()]
+            bundle = compose_selected_global_bundle(cleaned_paths, agent)
+            if not bundle:
+                return self._send_json({"error": "No valid global items selected for this agent"}, status=400)
+
+            if destination == "global":
+                target_file = global_target_for_agent(agent)
+            else:
+                target_file = project_target_for_agent(agent)
+                if target_file is None:
+                    return self._send_json({"error": "No writable project target for agent"}, status=400)
+
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            target_file.write_text(bundle, encoding="utf-8")
+
+            return self._send_json(
+                {
+                    "ok": True,
+                    "destination": destination,
+                    "agent": agent,
+                    "written": [str(target_file)],
+                    "stdout": f"Applied selected GLOBAL items to {destination} scope for {agent}.",
+                    "stderr": "",
+                }
+            )
+
         if parsed.path == "/api/render":
             ok, code, out, err = run_orkestra(["render"])
             return self._send_json(
@@ -1038,6 +1652,77 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 status=200 if ok else 500,
             )
+
+        if parsed.path == "/api/deploy":
+            """
+            Config-driven deployment endpoint.
+            POST /api/deploy
+            {
+                "agent": "claude",
+                "scope": "project"|"global",
+                "template": "python-flask",  // optional, for {template} expansion
+                "deploymentIds": ["claude-project-instructions", "claude-project-skills"]
+            }
+            """
+            data = self._read_json()
+            agent = str(data.get("agent", "")).strip()
+            scope = str(data.get("scope", "")).strip()
+            template = str(data.get("template", "")).strip()
+            deployment_ids = data.get("deploymentIds", [])
+            
+            if not agent:
+                return self._send_json({"error": "Missing agent"}, status=400)
+            if scope not in ("global", "project"):
+                return self._send_json({"error": "Invalid scope (must be 'global' or 'project')"}, status=400)
+            if not deployment_ids:
+                return self._send_json({"error": "No deploymentIds specified"}, status=400)
+            
+            # Load config
+            config = load_agents_config()
+            deployments = config.get("deployments", [])
+            
+            # Filter deployments by agent, scope, and requested IDs
+            to_execute = []
+            for deployment in deployments:
+                dep_id = deployment.get("id", "")
+                dep_agent = deployment.get("agent", "")
+                dep_scope = deployment.get("scope", "")
+                
+                # Match criteria
+                if dep_id in deployment_ids:
+                    # Agent must match or be "all"
+                    if dep_agent == agent or dep_agent == "all":
+                        # Scope must match
+                        if dep_scope == scope:
+                            to_execute.append(deployment)
+            
+            if not to_execute:
+                return self._send_json({
+                    "error": f"No matching deployments found for agent={agent}, scope={scope}, ids={deployment_ids}"
+                }, status=400)
+            
+            # Execute deployments
+            results = []
+            overall_success = True
+            for deployment in to_execute:
+                dep_id = deployment.get("id", "unknown")
+                success, message = execute_deployment(deployment, template)
+                results.append({
+                    "id": dep_id,
+                    "success": success,
+                    "message": message
+                })
+                if not success:
+                    overall_success = False
+            
+            return self._send_json({
+                "ok": overall_success,
+                "agent": agent,
+                "scope": scope,
+                "template": template,
+                "executed": len(results),
+                "results": results
+            }, status=200 if overall_success else 500)
 
         else:
             self.send_error(404, "Not found")

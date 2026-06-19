@@ -8,8 +8,15 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Orkestra</h1>
-    <div class="status" id="status">Ready</div>
+    <div class="topbarSection topbarLeft">
+      <h1>Orkestra</h1>
+    </div>
+    <div class="topbarSection topbarCenter">
+      <span id="projectPath" class="projectPath"></span>
+    </div>
+    <div class="topbarSection topbarRight">
+      <div id="agentFilters" class="agentFilters"></div>
+    </div>
   </header>
 
   <main class="layout">
@@ -19,20 +26,23 @@
           <section class="fileColumn sourceColumn" id="sourceFileColumn">
             <div class="columnHead">
               <h2>A: Source (Orkestra)</h2>
-              <div id="sourceHeaderControls"></div>
             </div>
             <div id="sourceColumn" class="sourceContent"></div>
           </section>
 
           <section class="fileColumn">
-            <h2>B: Global</h2>
-            <div class="quickFilters" id="globalFilters"></div>
+            <div class="columnHead">
+              <h2>B: Global</h2>
+              <div class="columnHeadControls" id="globalHeaderControls"></div>
+            </div>
             <div id="globalColumn"></div>
           </section>
 
           <section class="fileColumn">
-            <h2>C: Rendered</h2>
-            <div class="quickFilters" id="renderedFilters"></div>
+            <div class="columnHead">
+              <h2>C: Project</h2>
+              <div class="columnHeadControls" id="renderedHeaderControls"></div>
+            </div>
             <div id="renderedColumn"></div>
           </section>
         </div>
@@ -41,33 +51,40 @@
 
     <section class="panel previewPanel">
       <div class="previewGrid" id="previewGrid">
-        <section class="previewCol">
+        <section class="previewCol" id="leftCol">
           <div class="previewColHead">
             <span id="leftMeta">Preview: -</span>
+            <label class="compareCheckLabel" id="compareCheckLabel" hidden>
+              <input type="checkbox" id="compareCheckbox"> Compare
+            </label>
           </div>
           <textarea id="leftEditor" spellcheck="false" placeholder="Select a file pill above..."></textarea>
         </section>
 
         <section class="previewCol" id="rightCol" hidden>
           <div class="previewColHead">
-            <span id="rightMeta">Right: -</span>
+            <span id="rightMeta">Compare: -</span>
           </div>
-          <textarea id="rightEditor" spellcheck="false" placeholder="Compare target will appear here..."></textarea>
+          <textarea id="rightEditor" spellcheck="false" placeholder="Click any file to compare..."></textarea>
         </section>
-      </div>
 
-      <div class="editorHeader" id="diffHeader" hidden>
-        <strong>Diff</strong>
+        <div id="diffVisual" class="diffVisual" hidden></div>
       </div>
-      <div id="diffVisual" class="diffVisual" hidden></div>
-      <textarea id="diffOutput" spellcheck="false" placeholder="Enable compare mode, then select a second file from another column." readonly hidden></textarea>
-
-      <div class="editorHeader">
-        <strong>Output</strong>
-      </div>
-      <textarea id="output" spellcheck="false" placeholder="Action output appears here..." readonly></textarea>
     </section>
   </main>
+
+  <div class="modalBackdrop" id="confirmModal" hidden>
+    <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalBody">
+      <div class="modalHead">
+        <h2 id="confirmModalTitle">Confirm Apply</h2>
+      </div>
+      <div class="modalBody" id="confirmModalBody"></div>
+      <div class="modalActions">
+        <button type="button" class="modalBtn modalBtnSecondary" id="confirmModalCancel">Cancel</button>
+        <button type="button" class="modalBtn modalBtnPrimary" id="confirmModalConfirm">Apply</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

@@ -4,18 +4,25 @@
 global_locations:
   claude:
     - ~/.claude
+    - ~/.claude/agents
+    - ~/.claude/skills
   codex:
     - ~/.codex
+    - ~/.codex/prompts
   copilot:
     - ~/.github
+    - ~/.copilot
     - ~/Library/Application Support/Code/User/prompts
 
 global_files:
   claude:
     - ~/CLAUDE.md
     - ~/.claude/CLAUDE.md
+    - ~/.claude/settings.json
   codex:
     - ~/AGENTS.md
     - ~/.codex/AGENTS.md
+    - ~/.codex/config.toml
   copilot:
+    - ~/.copilot/copilot-instructions.md
     - ~/.github/copilot-instructions.md

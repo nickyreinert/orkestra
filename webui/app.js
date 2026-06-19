@@ -1,50 +1,59 @@
 const sourceColumn = document.getElementById('sourceColumn');
 const globalColumn = document.getElementById('globalColumn');
 const renderedColumn = document.getElementById('renderedColumn');
-const globalFilters = document.getElementById('globalFilters');
-const renderedFilters = document.getElementById('renderedFilters');
-const sourceHeaderControls = document.getElementById('sourceHeaderControls');
+const agentFilters = document.getElementById('agentFilters');
+const globalHeaderControls = document.getElementById('globalHeaderControls');
+const renderedHeaderControls = document.getElementById('renderedHeaderControls');
 
 const leftEditor = document.getElementById('leftEditor');
 const rightEditor = document.getElementById('rightEditor');
 const rightCol = document.getElementById('rightCol');
 const previewGrid = document.getElementById('previewGrid');
 
-const compareToggle = document.getElementById('compareToggle');
-const compareToggleWrap = document.getElementById('compareToggleWrap');
-const diffOutput = document.getElementById('diffOutput');
-const diffHeader = document.getElementById('diffHeader');
 const diffVisual = document.getElementById('diffVisual');
-const output = document.getElementById('output');
+const compareCheckbox = document.getElementById('compareCheckbox');
+const compareCheckLabel = document.getElementById('compareCheckLabel');
 
 const savePrimaryBtn = document.getElementById('savePrimaryBtn');
 const saveSecondaryBtn = document.getElementById('saveSecondaryBtn');
 const applyLeftToRightBtn = document.getElementById('applyLeftToRightBtn');
 const applyRightToLeftBtn = document.getElementById('applyRightToLeftBtn');
-const copyDiffBtn = document.getElementById('copyDiffBtn');
-const copyOutputBtn = document.getElementById('copyOutputBtn');
 
 const projectPathEl = document.getElementById('projectPath');
 const projectStateEl = document.getElementById('projectState');
-const statusEl = document.getElementById('status');
 const currentPathEl = document.getElementById('currentPath');
 const leftMeta = document.getElementById('leftMeta');
 const rightMeta = document.getElementById('rightMeta');
+const confirmModal = document.getElementById('confirmModal');
+const confirmModalBody = document.getElementById('confirmModalBody');
+const confirmModalConfirm = document.getElementById('confirmModalConfirm');
+const confirmModalCancel = document.getElementById('confirmModalCancel');
+
+if (confirmModal) {
+  confirmModal.hidden = true;
+}
 
 let latestIndex = null;
 let primary = null;
 let secondary = null;
 let compareArmed = false;
+let compareMode = false;
+let comparePrimaryKey = '';
 let currentDiffBlocks = [];
-let globalAgentFilter = 'all';
-let renderedAgentFilter = 'all';
+let activeAgentFilter = '';
 let devHash = null;
+let globalSelectionState = {};
+let renderedSelectionState = {};
+let globalApplyBtn = null;
+let renderedApplyBtn = null;
+let confirmModalResolver = null;
 const sourceDeployState = {
   agents: {},
   globalEnabled: false,
   globalFiles: {},
   activeTemplate: '',
   templateFiles: {},
+  extrasFiles: {},
 };
 
 function titleCase(value) {
@@ -59,6 +68,9 @@ function renderPills(container, options, active, onPick) {
     const btn = document.createElement('button');
     btn.className = 'pillBtn' + (opt.value === active ? ' active' : '');
     btn.textContent = opt.label;
+    btn.type = 'button';
+    btn.dataset.agent = opt.value;
+    btn.setAttribute('aria-pressed', opt.value === active ? 'true' : 'false');
     btn.onclick = () => onPick(opt.value);
     container.appendChild(btn);
   });
@@ -85,7 +97,7 @@ function ensureSourceDeployState(data) {
   });
 
   (data.templatesSource || []).forEach((tpl) => {
-    const paths = [tpl.templateYaml];
+    const paths = [];
     ['Planning', 'Coding', 'Review', 'Other'].forEach((cat) => {
       (tpl.instructionsByCategory[cat] || []).forEach((filename) => {
         paths.push(sourcePathForTemplateInstruction(tpl.name, filename));
@@ -98,6 +110,12 @@ function ensureSourceDeployState(data) {
         sourceDeployState.templateFiles[tpl.name][p] = true;
       }
     });
+  });
+
+  (data.extras || []).forEach((item) => {
+    if (typeof sourceDeployState.extrasFiles[item.path] !== 'boolean') {
+      sourceDeployState.extrasFiles[item.path] = true;
+    }
   });
 }
 
@@ -120,6 +138,10 @@ function collectSelectedSourcePaths() {
       if (sourceDeployState.templateFiles[tpl][path]) out.push(path);
     });
   }
+
+  Object.keys(sourceDeployState.extrasFiles).forEach((path) => {
+    if (sourceDeployState.extrasFiles[path]) out.push(path);
+  });
 
   return out;
 }
@@ -156,7 +178,90 @@ function startDevHotReload() {
 }
 
 function setStatus(msg) {
-  if (statusEl) statusEl.textContent = msg;
+  // Status element removed from header, log to console for debugging
+  console.log('[Orkestra]', msg);
+}
+
+function clearNode(node) {
+  if (!node) return;
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function closeConfirmModal(result) {
+  if (!confirmModal || !confirmModalResolver) return;
+  confirmModal.hidden = true;
+  document.body.style.overflow = '';
+  const resolve = confirmModalResolver;
+  confirmModalResolver = null;
+  resolve(result);
+}
+
+function showConfirmModal(content) {
+  if (!confirmModal || !confirmModalBody || !confirmModalConfirm || !confirmModalCancel) {
+    return Promise.resolve(false);
+  }
+
+  if (confirmModalResolver) {
+    closeConfirmModal(false);
+  }
+
+  clearNode(confirmModalBody);
+
+  if (typeof content === 'string') {
+    confirmModalBody.textContent = content;
+  } else if (content && typeof content === 'object') {
+    if (content.lead) {
+      const lead = document.createElement('p');
+      lead.className = 'modalLead';
+      lead.textContent = content.lead;
+      confirmModalBody.appendChild(lead);
+    }
+
+    if (Array.isArray(content.meta) && content.meta.length) {
+      const metaList = document.createElement('dl');
+      metaList.className = 'modalMetaList';
+      content.meta.forEach((item) => {
+        const dt = document.createElement('dt');
+        dt.textContent = item.label;
+        const dd = document.createElement('dd');
+        dd.textContent = item.value;
+        metaList.appendChild(dt);
+        metaList.appendChild(dd);
+      });
+      confirmModalBody.appendChild(metaList);
+    }
+
+    if (Array.isArray(content.items) && content.items.length) {
+      const listTitle = document.createElement('p');
+      listTitle.className = 'modalListTitle';
+      listTitle.textContent = 'Selected files';
+      confirmModalBody.appendChild(listTitle);
+
+      const list = document.createElement('ul');
+      list.className = 'modalItemList';
+      content.items.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      confirmModalBody.appendChild(list);
+    }
+
+    if (content.note) {
+      const note = document.createElement('p');
+      note.className = 'modalNote';
+      note.textContent = content.note;
+      confirmModalBody.appendChild(note);
+    }
+  }
+
+  confirmModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+
+  return new Promise((resolve) => {
+    confirmModalResolver = resolve;
+    confirmModalConfirm.focus();
+  });
 }
 
 async function apiGet(url) {
@@ -236,6 +341,20 @@ function fileButton(fileRef) {
   return btn;
 }
 
+function fileKey(fileRef) {
+  return `${fileRef.location}:${fileRef.path}`;
+}
+
+function disableCompareMode() {
+  compareMode = false;
+  compareArmed = false;
+  comparePrimaryKey = '';
+  clearSecondary();
+  if (compareCheckbox) compareCheckbox.checked = false;
+  renderSelectionMeta();
+  setButtonStates();
+}
+
 function addFileButton(parent, fileRef) {
   const li = document.createElement('li');
   li.appendChild(fileButton(fileRef));
@@ -252,46 +371,6 @@ function createEmptyMessage(text) {
 function renderSourceColumn(data) {
   sourceColumn.innerHTML = '';
   ensureSourceDeployState(data);
-
-  if (sourceHeaderControls) {
-    sourceHeaderControls.innerHTML = '';
-    const inlineDeploy = document.createElement('span');
-    inlineDeploy.className = 'inlineDeployControls';
-
-    const deployGlobalBtn = document.createElement('button');
-    deployGlobalBtn.type = 'button';
-    deployGlobalBtn.className = 'inlineDeployBtn';
-    deployGlobalBtn.textContent = 'G';
-    deployGlobalBtn.title = 'Deploy selected source variants to global scope';
-    deployGlobalBtn.onclick = () => deploySectionFromTop('global');
-    inlineDeploy.appendChild(deployGlobalBtn);
-
-    const deployProjectBtn = document.createElement('button');
-    deployProjectBtn.type = 'button';
-    deployProjectBtn.className = 'inlineDeployBtn';
-    deployProjectBtn.textContent = 'P';
-    deployProjectBtn.title = 'Deploy selected source variants to project scope';
-    deployProjectBtn.onclick = () => deploySectionFromTop('project');
-    inlineDeploy.appendChild(deployProjectBtn);
-
-    const inlineAgents = document.createElement('span');
-    inlineAgents.className = 'inlineAgentChecks';
-    (data.agents || []).forEach((agent) => {
-      const label = document.createElement('label');
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = !!sourceDeployState.agents[agent];
-      checkbox.onchange = () => {
-        sourceDeployState.agents[agent] = checkbox.checked;
-      };
-      label.appendChild(checkbox);
-      label.append(' ' + titleCase(agent));
-      inlineAgents.appendChild(label);
-    });
-
-    inlineDeploy.appendChild(inlineAgents);
-    sourceHeaderControls.appendChild(inlineDeploy);
-  }
 
   const globalCard = document.createElement('details');
   globalCard.className = 'templateCard';
@@ -374,7 +453,7 @@ function renderSourceColumn(data) {
     summary.appendChild(summaryRow);
     card.appendChild(summary);
 
-    const paths = [t.templateYaml];
+    const paths = [];
     ['Planning', 'Coding', 'Review', 'Other'].forEach((cat) => {
       (t.instructionsByCategory[cat] || []).forEach((filename) => {
         paths.push(sourcePathForTemplateInstruction(t.name, filename));
@@ -407,6 +486,225 @@ function renderSourceColumn(data) {
     }
     sourceColumn.appendChild(card);
   });
+
+  // Extras: skills, mcp, workflows, etc.
+  const extrasByCategory = {};
+  (data.extras || []).forEach((item) => {
+    extrasByCategory[item.category] = extrasByCategory[item.category] || [];
+    extrasByCategory[item.category].push(item.path);
+  });
+
+  Object.keys(extrasByCategory).sort().forEach((cat) => {
+    const extCard = document.createElement('details');
+    extCard.className = 'templateCard';
+    extCard.open = false;
+
+    const extSummary = document.createElement('summary');
+    extSummary.className = 'templateSummary';
+    extSummary.textContent = titleCase(cat);
+    extCard.appendChild(extSummary);
+
+    const extUl = document.createElement('ul');
+    (extrasByCategory[cat] || []).forEach((path) => {
+      const li = document.createElement('li');
+      li.className = 'sourceRow';
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = !!sourceDeployState.extrasFiles[path];
+      check.onchange = () => {
+        sourceDeployState.extrasFiles[path] = check.checked;
+      };
+
+      const btn = fileButton({ location: 'source', path });
+      li.appendChild(check);
+      li.appendChild(btn);
+      extUl.appendChild(li);
+    });
+
+    if (!extUl.children.length) {
+      extCard.appendChild(createEmptyMessage('No files.'));
+    } else {
+      extCard.appendChild(extUl);
+    }
+    sourceColumn.appendChild(extCard);
+  });
+}
+
+function renderAgentFilters(agents) {
+  if (!agentFilters) return;
+  
+  agentFilters.innerHTML = '';
+  
+  if (!agents || !agents.length) {
+    return;
+  }
+  
+  // Set default if not set
+  if (!activeAgentFilter && agents.length > 0) {
+    activeAgentFilter = agents[0];
+  }
+  
+  agents.forEach((agent) => {
+    const btn = document.createElement('button');
+    btn.className = 'pillBtn' + (agent === activeAgentFilter ? ' active' : '');
+    btn.textContent = titleCase(agent);
+    btn.type = 'button';
+    btn.dataset.agent = agent;
+    btn.setAttribute('aria-pressed', agent === activeAgentFilter ? 'true' : 'false');
+    btn.onclick = () => {
+      activeAgentFilter = agent;
+      renderAgentFilters(agents);
+      if (latestIndex) {
+        renderGlobalColumn(latestIndex);
+        renderRenderedColumn(latestIndex);
+      }
+      updateApplyButtonStates();
+      setActiveButtons();
+    };
+    agentFilters.appendChild(btn);
+  });
+}
+
+function selectedGlobalPathsForAgent(agent) {
+  if (!agent) return [];
+  const prefix = 'global/' + agent + '/';
+  return Object.keys(globalSelectionState).filter((path) => path.startsWith(prefix) && globalSelectionState[path]);
+}
+
+function selectedProjectPathsForAgent(agent) {
+  if (!agent) return [];
+  const prefix = 'project/' + agent + '/';
+  return Object.keys(renderedSelectionState).filter((path) => path.startsWith(prefix) && renderedSelectionState[path]);
+}
+
+function applyButtonLabel(scope, agent, count) {
+  const arrow = scope === 'global' ? '↗' : '↘';
+  const agentLabel = agent ? titleCase(agent) : 'Agent';
+  return 'APPLY ' + arrow + ' ' + agentLabel + (count ? ' (' + count + ')' : '');
+}
+
+function updateApplyButtonStates() {
+  const globalCount = selectedGlobalPathsForAgent(activeAgentFilter).length;
+  const projectCount = selectedProjectPathsForAgent(activeAgentFilter).length;
+
+  if (globalApplyBtn) {
+    globalApplyBtn.disabled = !activeAgentFilter || globalCount === 0;
+    globalApplyBtn.textContent = applyButtonLabel('global', activeAgentFilter, globalCount);
+    globalApplyBtn.title = activeAgentFilter
+      ? 'Apply selected GLOBAL items to global scope for ' + titleCase(activeAgentFilter)
+      : 'Select one agent first';
+  }
+
+  if (renderedApplyBtn) {
+    renderedApplyBtn.disabled = !activeAgentFilter || projectCount === 0;
+    renderedApplyBtn.textContent = applyButtonLabel('project', activeAgentFilter, projectCount);
+    renderedApplyBtn.title = activeAgentFilter
+      ? 'Apply selected GLOBAL items to project scope for ' + titleCase(activeAgentFilter)
+      : 'Select one agent first';
+  }
+}
+
+function renderHeaderApplyControls() {
+  if (globalHeaderControls) {
+    globalHeaderControls.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'headerApplyBtn';
+    btn.onclick = () => applyGlobalSelectionToScope('global');
+    globalHeaderControls.appendChild(btn);
+    globalApplyBtn = btn;
+  } else {
+    globalApplyBtn = null;
+  }
+
+  if (renderedHeaderControls) {
+    renderedHeaderControls.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'headerApplyBtn';
+    btn.onclick = () => applyGlobalSelectionToScope('project');
+    renderedHeaderControls.appendChild(btn);
+    renderedApplyBtn = btn;
+  } else {
+    renderedApplyBtn = null;
+  }
+
+  updateApplyButtonStates();
+}
+
+function getDeploymentsForScope(scope, agent, itemType = null) {
+  const deployments = (latestIndex?.deployments || []).filter(d => 
+    d.scope === scope && 
+    d.agent === agent &&
+    (!itemType || d.item_type === itemType)
+  );
+  return deployments;
+}
+
+async function applyGlobalSelectionToScope(scope) {
+  const agent = activeAgentFilter;
+  if (!agent) {
+    alert('Select one agent first.');
+    return;
+  }
+
+  const selectedPaths = selectedGlobalPathsForAgent(agent);
+  if (!selectedPaths.length) {
+    alert('Select at least one item in B: GLOBAL for ' + titleCase(agent) + '.');
+    return;
+  }
+
+  // Get all deployments for this agent and scope
+  const deployments = getDeploymentsForScope(scope, agent);
+  if (!deployments.length) {
+    alert('No deployments configured for ' + titleCase(agent) + ' in ' + scope + ' scope.');
+    return;
+  }
+
+  const deploymentIds = deployments.map(d => d.id);
+  const scopeLabel = scope === 'global' ? 'Global scope' : 'Project scope';
+
+  const ok = await showConfirmModal({
+    lead: 'Deploy ' + titleCase(agent) + ' configurations to ' + scopeLabel + '?',
+    meta: [
+      { label: 'Scope', value: scopeLabel },
+      { label: 'Agent', value: titleCase(agent) },
+      { label: 'Deployments', value: String(deploymentIds.length) },
+    ],
+    items: deploymentIds,
+    note: 'This will execute configured deployment strategies for selected scope.',
+  });
+  if (!ok) return;
+
+  try {
+    console.log('Deploying:', { agent, scope, deploymentIds });
+    const result = await apiPost('/api/deploy', {
+      agent: agent,
+      scope: scope,
+      deploymentIds: deploymentIds,
+      template: latestIndex?.project?.template || null
+    });
+
+    console.log('Deploy results:', result);
+    
+    // Handle results array
+    const results = result.results || [];
+    const failed = results.filter(r => !r.success);
+    
+    if (failed.length) {
+      console.error('Deployment failures:', failed);
+      const failedIds = failed.map(r => r.deployment_id).join(', ');
+      alert('Some deployments failed: ' + failedIds + '\n\nCheck console for details.');
+    } else {
+      console.log('All deployments succeeded:', results);
+    }
+    
+    await loadIndex();
+  } catch (err) {
+    console.error('Deploy error:', err);
+    alert('Deploy failed: ' + err.message);
+  }
 }
 
 async function deploySectionFromTop(destination) {
@@ -435,9 +733,8 @@ async function deploySectionFromTop(destination) {
       agents,
     });
 
-    output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
-    if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
-    setStatus('Variant deploy finished');
+    const deployMessage = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
+    setStatus(deployMessage || 'Variant deploy finished');
     await loadIndex();
   } catch (err) {
     setStatus('Variant deploy failed');
@@ -451,30 +748,13 @@ function renderGlobalColumn(data) {
   globalColumn.appendChild(hint);
 
   const byAgent = data.globalByAgent || {};
-  const agents = Object.keys(byAgent).sort();
   const templateNames = (data.templatesSource || []).map((t) => t.name);
-
-  renderPills(
-    globalFilters,
-    [{ value: 'all', label: 'All' }, ...agents.map((agent) => ({ value: agent, label: titleCase(agent) }))],
-    globalAgentFilter,
-    (value) => {
-      globalAgentFilter = value;
-      renderGlobalColumn(data);
-      setActiveButtons();
-    }
-  );
-
-  if (!agents.length) {
-    globalColumn.appendChild(createEmptyMessage('No global files found.'));
-    return;
-  }
 
   const grouped = {};
   const categoryOrder = ['Global Instructions', ...templateNames, 'Config'];
 
-  agents.forEach((agent) => {
-    if (globalAgentFilter !== 'all' && globalAgentFilter !== agent) return;
+  Object.keys(byAgent).forEach((agent) => {
+    if (activeAgentFilter && activeAgentFilter !== agent) return;
     (byAgent[agent] || []).forEach((path) => {
       const category = globalInstructionCategory(path, templateNames);
       if (!category) return;
@@ -504,7 +784,7 @@ function renderGlobalColumn(data) {
     Object.keys(agentMap).sort().forEach((agent) => {
       const agentCard = document.createElement('details');
       agentCard.className = 'templateCard globalAgentCard';
-      agentCard.open = globalAgentFilter !== 'all';
+      agentCard.open = true;
 
       const agentSummary = document.createElement('summary');
       agentSummary.className = 'templateSummary';
@@ -514,7 +794,21 @@ function renderGlobalColumn(data) {
       const ul = document.createElement('ul');
       ul.className = 'globalInstructionList';
       (agentMap[agent] || []).forEach((path) => {
-        addFileButton(ul, { location: 'global', path });
+        const li = document.createElement('li');
+        li.className = 'sourceRow';
+
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.checked = !!globalSelectionState[path];
+        check.onchange = () => {
+          globalSelectionState[path] = check.checked;
+          updateApplyButtonStates();
+        };
+
+        const btn = fileButton({ location: 'global', path });
+        li.appendChild(check);
+        li.appendChild(btn);
+        ul.appendChild(li);
       });
       agentCard.appendChild(ul);
 
@@ -527,19 +821,6 @@ function renderGlobalColumn(data) {
 
 function renderRenderedColumn(data) {
   renderedColumn.innerHTML = '';
-
-  const renderedAgentOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'claude', label: 'Claude' },
-    { value: 'codex', label: 'Codex' },
-    { value: 'copilot', label: 'Copilot' },
-    { value: 'orkestra', label: 'Orkestra' },
-  ];
-  renderPills(renderedFilters, renderedAgentOptions, renderedAgentFilter, (value) => {
-    renderedAgentFilter = value;
-    renderRenderedColumn(data);
-    setActiveButtons();
-  });
 
   if (!data.renderedAvailable) {
     renderedColumn.appendChild(createEmptyMessage('Project is not initialized yet.'));
@@ -558,7 +839,7 @@ function renderRenderedColumn(data) {
   const globalList = document.createElement('ul');
   (data.globalRendered || []).forEach((name) => {
     const path = renderedPathForGlobalInstruction(name);
-    if (matchesRenderedAgent(path, renderedAgentFilter)) {
+    if (!activeAgentFilter || matchesRenderedAgent(path, activeAgentFilter)) {
       addFileButton(globalList, { location: 'rendered', path });
     }
   });
@@ -590,7 +871,7 @@ function renderRenderedColumn(data) {
     const files = renderedTemplate.instructionsByCategory[cat] || [];
     files.forEach((filename) => {
       const path = renderedPathForTemplateInstruction(filename);
-      if (matchesRenderedAgent(path, renderedAgentFilter)) {
+      if (!activeAgentFilter || matchesRenderedAgent(path, activeAgentFilter)) {
         addFileButton(ul, { location: 'rendered', path });
       }
     });
@@ -606,7 +887,6 @@ function renderRenderedColumn(data) {
 }
 
 function setButtonStates() {
-  const compareMode = !!(compareToggle && compareToggle.checked);
   const hasCompareTarget = compareMode && !!secondary;
   const leftWritable = !!primary && !primary.readOnly;
   const rightWritable = !!secondary && !secondary.readOnly;
@@ -618,8 +898,6 @@ function setButtonStates() {
   if (applyLeftToRightBtn) applyLeftToRightBtn.disabled = !hasCompareTarget || !(bothSelected && rightWritable);
   if (applyRightToLeftBtn) applyRightToLeftBtn.disabled = !hasCompareTarget || !(bothSelected && leftWritable);
 
-  if (copyDiffBtn) copyDiffBtn.disabled = !hasCompareTarget || !diffOutput.value;
-  if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
 }
 
 function editorLines(text) {
@@ -638,68 +916,102 @@ function mk(tag, cls, text) {
   return el;
 }
 
-function renderSideBySideDiff(blocks) {
+const DIFF_CONTEXT = 3;
+
+function makeDiffSide(cls, lineNum, text) {
+  const side = mk('div', 'diffSide ' + cls);
+  side.appendChild(mk('span', 'diffNum', lineNum !== null && lineNum !== undefined ? String(lineNum) : ''));
+  side.appendChild(mk('span', 'diffCode', text !== undefined && text !== null ? text : ''));
+  return side;
+}
+
+function makeDiffRow(tag, leftNum, leftText, rightNum, rightText) {
+  const row = mk('div', 'diffRow ' + tag);
+  row.appendChild(makeDiffSide('left', leftNum, leftText));
+  row.appendChild(makeDiffSide('right', rightNum, rightText));
+  return row;
+}
+
+function renderSideBySideDiff(blocks, leftLines, rightLines) {
   diffVisual.innerHTML = '';
   currentDiffBlocks = blocks || [];
+  leftLines = leftLines || [];
+  rightLines = rightLines || [];
 
   if (!currentDiffBlocks.length) {
-    diffVisual.appendChild(mk('div', 'diffEmpty', 'No differences.'));
+    if (leftLines.length) {
+      diffVisual.appendChild(mk('div', 'diffEmpty', 'Files are identical.'));
+    }
     return;
   }
 
+  let li = 0;
+  let ri = 0;
+
   currentDiffBlocks.forEach((block) => {
-    const hunk = mk('section', 'diffHunk');
+    const ctxStart = Math.max(li, block.leftStart - DIFF_CONTEXT);
+    const ctxRStart = ri + (ctxStart - li);
 
-    const header = mk('div', 'diffHunkHeader');
-    const meta = mk(
-      'span',
-      'diffHunkMeta',
-      `Hunk ${block.id} | L${block.leftStart + 1}-${block.leftEnd} <> R${block.rightStart + 1}-${block.rightEnd}`
-    );
-
-    const actions = mk('div', 'hunkActions');
-    const btnL2R = mk('button', '', '→');
-    btnL2R.title = 'Apply this hunk left to right';
-    btnL2R.onclick = () => applyHunk(block, 'leftToRight');
-
-    const btnR2L = mk('button', '', '<-');
-    btnR2L.title = 'Apply this hunk right to left';
-    btnR2L.onclick = () => applyHunk(block, 'rightToLeft');
-
-    actions.appendChild(btnL2R);
-    actions.appendChild(btnR2L);
-
-    header.appendChild(meta);
-    header.appendChild(actions);
-    hunk.appendChild(header);
-
-    const grid = mk('div', 'diffGrid');
-    const leftLines = block.leftLines || [];
-    const rightLines = block.rightLines || [];
-    const rows = Math.max(leftLines.length, rightLines.length);
-
-    for (let i = 0; i < rows; i++) {
-      const leftLine = leftLines[i];
-      const rightLine = rightLines[i];
-
-      const leftCls = block.tag === 'insert' ? 'diffCell empty' : 'diffCell removed';
-      const rightCls = block.tag === 'delete' ? 'diffCell empty' : 'diffCell added';
-
-      const leftCell = mk('div', leftLine === undefined ? 'diffCell empty' : leftCls);
-      leftCell.appendChild(mk('div', 'diffNum', leftLine === undefined ? '' : String(block.leftStart + i + 1)));
-      leftCell.appendChild(mk('div', 'diffCode', leftLine === undefined ? '' : leftLine));
-
-      const rightCell = mk('div', rightLine === undefined ? 'diffCell empty' : rightCls);
-      rightCell.appendChild(mk('div', 'diffNum', rightLine === undefined ? '' : String(block.rightStart + i + 1)));
-      rightCell.appendChild(mk('div', 'diffCode', rightLine === undefined ? '' : rightLine));
-
-      grid.appendChild(leftCell);
-      grid.appendChild(rightCell);
+    if (ctxStart > li) {
+      const skipped = ctxStart - li;
+      const sep = mk('div', 'diffSeparator');
+      sep.textContent = `⋯  ${skipped} unchanged line${skipped !== 1 ? 's' : ''}  ⋯`;
+      diffVisual.appendChild(sep);
     }
 
-    hunk.appendChild(grid);
-    diffVisual.appendChild(hunk);
+    for (let i = 0; i < block.leftStart - ctxStart; i++) {
+      const lIdx = ctxStart + i;
+      const rIdx = ctxRStart + i;
+      diffVisual.appendChild(makeDiffRow('equal', lIdx + 1, leftLines[lIdx], rIdx + 1, rightLines[rIdx]));
+    }
+
+    const bar = mk('div', 'diffHunkBar');
+    const lCount = block.leftEnd - block.leftStart;
+    const rCount = block.rightEnd - block.rightStart;
+    bar.appendChild(mk('span', 'diffHunkLabel',
+      `@@ -${block.leftStart + 1},${lCount} +${block.rightStart + 1},${rCount} @@`));
+    const acts = mk('span', 'diffHunkActions');
+    const r2l = mk('button', 'diffBtn', '← accept left');
+    r2l.title = 'Replace right side with left (keep left)';
+    r2l.onclick = () => applyHunk(block, 'rightToLeft');
+    const l2r = mk('button', 'diffBtn', 'accept right →');
+    l2r.title = 'Replace left side with right (keep right)';
+    l2r.onclick = () => applyHunk(block, 'leftToRight');
+    acts.appendChild(r2l);
+    acts.appendChild(l2r);
+    bar.appendChild(acts);
+    diffVisual.appendChild(bar);
+
+    const lLines = block.leftLines || [];
+    const rLines = block.rightLines || [];
+    const rows = Math.max(lLines.length, rLines.length);
+    for (let i = 0; i < rows; i++) {
+      const lText = lLines[i];
+      const rText = rLines[i];
+      const lNum = lText !== undefined ? block.leftStart + i + 1 : null;
+      const rNum = rText !== undefined ? block.rightStart + i + 1 : null;
+      let tag = 'changed';
+      if (lText !== undefined && rText === undefined) tag = 'removed';
+      else if (lText === undefined && rText !== undefined) tag = 'added';
+      diffVisual.appendChild(makeDiffRow(tag, lNum, lText, rNum, rText));
+    }
+
+    li = block.leftEnd;
+    ri = block.rightEnd;
   });
+
+  const trailEnd = Math.min(li + DIFF_CONTEXT, leftLines.length);
+  for (let i = li; i < trailEnd; i++) {
+    const rIdx = ri + (i - li);
+    diffVisual.appendChild(makeDiffRow('equal', i + 1, leftLines[i], rIdx + 1, rightLines[rIdx]));
+  }
+
+  const remaining = leftLines.length - trailEnd;
+  if (remaining > 0) {
+    const sep = mk('div', 'diffSeparator');
+    sep.textContent = `⋯  ${remaining} unchanged line${remaining !== 1 ? 's' : ''}  ⋯`;
+    diffVisual.appendChild(sep);
+  }
 }
 
 async function applyHunk(block, direction) {
@@ -748,37 +1060,19 @@ function renderSelectionMeta() {
     }
   }
 
-  const hasPrimary = !!primary;
-  if (compareToggleWrap) compareToggleWrap.hidden = !hasPrimary;
+  // Show/hide compare checkbox label
+  if (compareCheckLabel) compareCheckLabel.hidden = !primary;
+  if (compareCheckbox && !compareMode) compareCheckbox.checked = false;
 
-  const showRight = !!(compareToggle && compareToggle.checked && secondary);
-  rightCol.hidden = !showRight;
-  rightCol.style.display = showRight ? 'flex' : 'none';
-  previewGrid.classList.toggle('compareMode', showRight);
+  // rightCol textarea stays hidden always – it's just a data source for the diff
+  rightCol.hidden = true;
+  rightCol.style.display = 'none';
 
-  const showCompareUi = !!(compareToggle && compareToggle.checked && secondary);
-  diffHeader.hidden = !showCompareUi;
-  diffOutput.hidden = !showCompareUi;
-  diffHeader.style.display = showCompareUi ? 'flex' : 'none';
-  diffOutput.style.display = 'none';
-  diffVisual.hidden = !showCompareUi;
-  diffVisual.style.display = showCompareUi ? 'flex' : 'none';
-  if (saveSecondaryBtn) {
-    saveSecondaryBtn.hidden = !showCompareUi;
-    saveSecondaryBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  }
-  if (applyLeftToRightBtn) {
-    applyLeftToRightBtn.hidden = !showCompareUi;
-    applyLeftToRightBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  }
-  if (applyRightToLeftBtn) {
-    applyRightToLeftBtn.hidden = !showCompareUi;
-    applyRightToLeftBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  }
-  if (copyDiffBtn) {
-    copyDiffBtn.hidden = !showCompareUi;
-    copyDiffBtn.style.display = showCompareUi ? 'inline-block' : 'none';
-  }
+  // In compare mode the grid hides editors and shows diffVisual in their place
+  const inDiffView = !!(compareMode && secondary);
+  previewGrid.classList.toggle('compareMode', inDiffView);
+  diffVisual.hidden = !inDiffView;
+  diffVisual.style.display = inDiffView ? 'flex' : 'none';
 }
 
 async function readFileRef(fileRef) {
@@ -791,9 +1085,8 @@ async function readFileRef(fileRef) {
 }
 
 async function refreshDiff() {
-  if (!(compareToggle && compareToggle.checked) || !primary || !secondary) {
-    diffOutput.value = '';
-    renderSideBySideDiff([]);
+  if (!compareMode || !primary || !secondary) {
+    renderSideBySideDiff([], [], []);
     setButtonStates();
     return;
   }
@@ -806,12 +1099,11 @@ async function refreshDiff() {
       rightContent: rightEditor.value,
     });
 
-    diffOutput.value = diff.diff || 'No differences.';
-    renderSideBySideDiff(diff.blocks || []);
+    diffVisual.hidden = false;
+    renderSideBySideDiff(diff.blocks || [], editorLines(leftEditor.value), editorLines(rightEditor.value));
     setButtonStates();
   } catch (err) {
-    diffOutput.value = 'Diff failed: ' + err.message;
-    renderSideBySideDiff([]);
+    renderSideBySideDiff([], [], []);
     setButtonStates();
   }
 }
@@ -820,29 +1112,28 @@ function clearSecondary() {
   secondary = null;
   rightEditor.value = '';
   rightEditor.readOnly = true;
-  renderSideBySideDiff([]);
+  renderSideBySideDiff([], [], []);
 }
 
 async function handleFilePick(fileRef) {
   try {
-    setStatus('Loading ' + fileRef.path + ' ...');
+    setStatus('Loading file ...');
     const resolved = await readFileRef(fileRef);
 
-    if (compareToggle && compareToggle.checked && compareArmed && primary && resolved.location !== primary.location) {
+    if (compareMode && primary && fileKey(resolved) !== fileKey(primary)) {
       secondary = resolved;
       rightEditor.value = secondary.content;
       rightEditor.readOnly = secondary.readOnly;
       compareArmed = false;
-      setStatus('Loaded compare target: ' + secondary.path);
+      setStatus('Compare target loaded');
     } else {
       primary = resolved;
       leftEditor.value = primary.content;
       leftEditor.readOnly = primary.readOnly;
-      if (!(compareToggle && compareToggle.checked)) {
+      if (!compareMode) {
         clearSecondary();
-        diffOutput.value = '';
       }
-      setStatus('Loaded ' + primary.path);
+      setStatus('File loaded');
     }
 
     renderSelectionMeta();
@@ -856,7 +1147,13 @@ async function handleFilePick(fileRef) {
 
 async function loadContext() {
   const ctx = await apiGet('/api/context');
-  if (projectPathEl) projectPathEl.textContent = 'Project: ' + ctx.projectDir;
+  if (projectPathEl) {
+    // Show just the directory name or last part of path
+    const pathParts = ctx.projectDir.split('/');
+    const dirName = pathParts[pathParts.length - 1] || ctx.projectDir;
+    projectPathEl.textContent = dirName;
+    projectPathEl.title = ctx.projectDir;  // Full path in tooltip
+  }
   if (projectStateEl) projectStateEl.textContent = 'State: ' + (ctx.initialized ? 'initialized' : 'not initialized');
 }
 
@@ -869,9 +1166,7 @@ async function loadIndex() {
   clearSecondary();
   leftEditor.value = '';
   leftEditor.readOnly = true;
-  diffOutput.value = '';
-  output.value = '';
-  if (compareToggle) compareToggle.checked = false;
+  disableCompareMode();
   compareArmed = false;
 
   renderSelectionMeta();
@@ -882,9 +1177,13 @@ async function loadIndex() {
     const data = await apiGet('/api/templates');
     latestIndex = data;
 
+    renderHeaderApplyControls();
+    renderAgentFilters(data.agents || []);
+
     renderSourceColumn(data);
     renderGlobalColumn(data);
     renderRenderedColumn(data);
+    updateApplyButtonStates();
     await loadContext();
     setActiveButtons();
     setStatus('Ready');
@@ -930,8 +1229,7 @@ async function applyCopy(direction) {
       target: { mode: target.location, path: target.path },
     });
 
-    output.value = ((result.stdout || '') + '\n' + (result.stderr || '')).trim() || 'Applied successfully.';
-    if (copyOutputBtn) copyOutputBtn.disabled = !output.value;
+    const applyMessage = ((result.stdout || '') + '\n' + (result.stderr || '')).trim();
 
     const updated = await readFileRef({ location: target.location, path: target.path });
     if (direction === 'leftToRight') {
@@ -945,7 +1243,7 @@ async function applyCopy(direction) {
     renderSelectionMeta();
     setActiveButtons();
     await refreshDiff();
-    setStatus('Apply finished');
+    setStatus(applyMessage || 'Apply finished');
   } catch (err) {
     setStatus('Apply failed');
     alert('Apply failed: ' + err.message);
@@ -958,52 +1256,40 @@ if (saveSecondaryBtn) saveSecondaryBtn.onclick = () => saveSide('right');
 if (applyLeftToRightBtn) applyLeftToRightBtn.onclick = () => applyCopy('leftToRight');
 if (applyRightToLeftBtn) applyRightToLeftBtn.onclick = () => applyCopy('rightToLeft');
 
-if (copyOutputBtn) {
-  copyOutputBtn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(output.value || '');
-      setStatus('Copied output');
-    } catch (_err) {
-      alert('Clipboard copy failed.');
-    }
-  };
-}
-
-if (copyDiffBtn) {
-  copyDiffBtn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(diffOutput.value || '');
-      setStatus('Copied diff');
-    } catch (_err) {
-      alert('Clipboard copy failed.');
-    }
-  };
-}
-
-if (compareToggle) {
-  compareToggle.addEventListener('change', () => {
-    if (!compareToggle.checked) {
-      compareArmed = false;
-      clearSecondary();
-      diffOutput.value = '';
-      renderSelectionMeta();
-      setActiveButtons();
-      setButtonStates();
+if (compareCheckbox) {
+  compareCheckbox.onchange = () => {
+    if (!compareCheckbox.checked) {
+      disableCompareMode();
       return;
     }
-
-    if (!primary) {
-      compareToggle.checked = false;
-      alert('Select a primary file first, then enable compare mode.');
-      return;
-    }
-
+    compareMode = true;
     compareArmed = true;
-    setStatus('Compare mode enabled. Pick a second file from another column.');
+    comparePrimaryKey = primary ? fileKey(primary) : '';
     renderSelectionMeta();
     setButtonStates();
+    setStatus('Compare mode active. Click any file to load into the right side.');
+  };
+}
+
+if (confirmModalConfirm) {
+  confirmModalConfirm.onclick = () => closeConfirmModal(true);
+}
+
+if (confirmModalCancel) {
+  confirmModalCancel.onclick = () => closeConfirmModal(false);
+}
+
+if (confirmModal) {
+  confirmModal.addEventListener('click', (event) => {
+    if (event.target === confirmModal) closeConfirmModal(false);
   });
 }
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && confirmModalResolver) {
+    closeConfirmModal(false);
+  }
+});
 
 leftEditor.addEventListener('input', () => {
   if (primary) {

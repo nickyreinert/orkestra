@@ -1,0 +1,466 @@
+# Orkestra Agents Configuration
+# This file defines available agents, item types, and deployment rules.
+# User overrides: ~/.config/orkestra/agents-config.yaml
+
+version: 1
+
+# Available AI coding agents
+agents:
+  - id: claude
+    label: Claude
+    description: Anthropic's Claude AI coding assistant with desktop app and CLI support
+    enabled: true
+
+  - id: codex
+    label: Codex
+    description: OpenAI Codex CLI coding agent with local TOML-based configuration
+    enabled: true
+
+  - id: copilot
+    label: Copilot
+    description: GitHub Copilot integrated into VS Code with instructions, skills, and agents
+    enabled: true
+
+# Item types that can be deployed
+item_types:
+  - id: instructions
+    label: Instructions
+    description: Core global instructions and template-specific guidance bundled into single files
+    source_roots:
+      - instructions/global
+      - templates/{template}/instructions
+    default_strategy: bundle
+
+  - id: skills
+    label: Skills
+    description: Reusable agent skills with domain-specific knowledge and capabilities
+    source_roots:
+      - skills
+    default_strategy: copy_tree
+
+  - id: mcp
+    label: MCP
+    description: Model Context Protocol server configurations for extended tool capabilities
+    source_roots:
+      - mcp
+    default_strategy: copy_file
+
+  - id: workflows
+    label: Workflows
+    description: Orchestrated multi-step workflows and automation sequences
+    source_roots:
+      - workflows
+    default_strategy: copy_file
+
+  - id: plugins
+    label: Plugins
+    description: Agent plugins and extensions for enhanced functionality
+    source_roots:
+      - plugins
+    default_strategy: copy_tree
+
+  - id: local_instructions
+    label: Local Instructions
+    description: Project-specific local instructions kept separate from version control
+    source_roots:
+      - instructions/local
+    default_strategy: bundle
+
+  - id: subagents
+    label: Subagents
+    description: Specialized sub-agents for focused task domains and workflows
+    source_roots:
+      - subagents
+    default_strategy: copy_tree
+
+  - id: prompts
+    label: Prompts
+    description: Reusable prompt templates and specialized conversation starters
+    source_roots:
+      - prompts
+    default_strategy: copy_file
+
+  - id: rules
+    label: Rules
+    description: Coding rules, style guides, and constraint definitions
+    source_roots:
+      - rules
+    default_strategy: copy_file
+
+  - id: settings
+    label: Settings
+    description: Agent-specific configuration files and preferences
+    source_roots:
+      - settings
+    default_strategy: copy_file
+
+  - id: workflow_policy
+    label: Workflow Policy
+    description: Policies governing workflow execution, approval gates, and constraints
+    source_roots:
+      - workflow-policy
+    default_strategy: copy_file
+
+  - id: setup_steps
+    label: Setup Steps
+    description: Automated setup and initialization steps for project scaffolding
+    source_roots:
+      - setup-steps
+    default_strategy: copy_file
+
+# Deployment rules: define what gets deployed where
+# Note: merge_json = deep-merge source JSON files into one target JSON
+# Note: render_into_toml = transform JSON MCP entries into TOML tables inside an existing .toml without clobbering unrelated keys
+deployments:
+  # Claude deployments
+  - id: claude-global-instructions
+    agent: claude
+    item_type: instructions
+    scope: global
+    description: Bundle global instructions into user's home directory CLAUDE.md
+    source:
+      - instructions/global/*.md
+    target: ~/CLAUDE.md
+    strategy: bundle
+    gitignore: false
+
+  - id: claude-project-instructions
+    agent: claude
+    item_type: instructions
+    scope: project
+    description: Bundle global and template instructions into project CLAUDE.md
+    source:
+      - instructions/global/*.md
+      - templates/{template}/instructions/*.md
+    target: CLAUDE.md
+    strategy: bundle
+    gitignore: false
+
+  - id: claude-project-local-instructions
+    agent: claude
+    item_type: local_instructions
+    scope: project
+    description: Bundle local project-specific instructions into CLAUDE.local.md (gitignored)
+    source:
+      - instructions/local/*.md
+    target: CLAUDE.local.md
+    strategy: bundle
+    gitignore: true
+
+  - id: claude-global-skills
+    agent: claude
+    item_type: skills
+    scope: global
+    description: Deploy Claude and Orkestra skills to global .claude/skills directory
+    source:
+      - skills/claude/*
+      - skills/orkestra/*
+    target: ~/.claude/skills/
+    strategy: copy_tree
+    gitignore: false
+
+  - id: claude-project-skills
+    agent: claude
+    item_type: skills
+    scope: project
+    description: Deploy Claude and Orkestra skills to project .claude/skills directory
+    source:
+      - skills/claude/*
+      - skills/orkestra/*
+    target: .claude/skills/
+    strategy: copy_tree
+    gitignore: true
+
+  - id: claude-global-subagents
+    agent: claude
+    item_type: subagents
+    scope: global
+    description: Deploy Claude sub-agents to global .claude/agents directory
+    source:
+      - subagents/claude/*
+    target: ~/.claude/agents/
+    strategy: copy_tree
+    gitignore: false
+
+  - id: claude-project-subagents
+    agent: claude
+    item_type: subagents
+    scope: project
+    description: Deploy Claude sub-agents to project .claude/agents directory
+    source:
+      - subagents/claude/*
+    target: .claude/agents/
+    strategy: copy_tree
+    gitignore: true
+
+  - id: claude-project-rules
+    agent: claude
+    item_type: rules
+    scope: project
+    description: Deploy Claude-specific coding rules and style guides
+    source:
+      - rules/claude/*.md
+    target: .claude/rules/
+    strategy: copy_file
+    gitignore: false
+
+  - id: claude-global-settings
+    agent: claude
+    item_type: settings
+    scope: global
+    description: Deploy Claude settings.json to global configuration directory
+    source:
+      - settings/claude/settings.json
+    target: ~/.claude/settings.json
+    strategy: copy_file
+    gitignore: false
+
+  - id: claude-project-settings
+    agent: claude
+    item_type: settings
+    scope: project
+    description: Deploy Claude settings.json to project .claude directory
+    source:
+      - settings/claude/settings.json
+    target: .claude/settings.json
+    strategy: copy_file
+    gitignore: false
+
+  - id: claude-project-plugins
+    agent: claude
+    item_type: plugins
+    scope: project
+    description: Deploy Claude plugins to project .claude/plugins directory
+    source:
+      - plugins/claude/*
+    target: .claude/plugins/
+    strategy: copy_tree
+    gitignore: true
+
+  - id: claude-project-mcp
+    agent: claude
+    item_type: mcp
+    scope: project
+    description: Merge all MCP server configs into Claude's project-root .mcp.json
+    source:
+      - mcp/*.json
+    target: .mcp.json
+    strategy: merge_json
+    gitignore: false
+    notes: "Claude reads MCP servers from project-root .mcp.json; merge all mcp/*.json into a single mcpServers object."
+
+  # Copilot deployments
+  - id: copilot-global-instructions
+    agent: copilot
+    item_type: instructions
+    scope: global
+    description: Bundle global instructions into user's .copilot/copilot-instructions.md
+    source:
+      - instructions/global/*.md
+    target: ~/.copilot/copilot-instructions.md
+    strategy: bundle
+    gitignore: false
+
+  - id: copilot-project-main-instructions
+    agent: copilot
+    item_type: instructions
+    scope: project
+    description: Bundle global instructions into project .github/copilot-instructions.md
+    source:
+      - instructions/global/*.md
+    target: .github/copilot-instructions.md
+    strategy: bundle
+    gitignore: false
+
+  - id: copilot-project-template-instructions
+    agent: copilot
+    item_type: instructions
+    scope: project
+    description: Copy template-specific instructions with YAML frontmatter to .github/instructions/
+    source:
+      - templates/{template}/instructions/*.md
+    target: .github/instructions/
+    strategy: copy_file
+    gitignore: false
+    notes: "Each *.instructions.md must include YAML frontmatter with an 'applyTo:' glob to scope it; rename outputs to *.instructions.md."
+
+  - id: copilot-project-agents
+    agent: copilot
+    item_type: subagents
+    scope: project
+    description: Deploy Copilot sub-agents (*.agent.md) to .github/agents/
+    source:
+      - subagents/copilot/*.agent.md
+    target: .github/agents/
+    strategy: copy_file
+    gitignore: false
+
+  - id: copilot-project-prompts
+    agent: copilot
+    item_type: prompts
+    scope: project
+    description: Deploy Copilot prompt templates (*.prompt.md) to .github/prompts/
+    source:
+      - prompts/copilot/*.prompt.md
+    target: .github/prompts/
+    strategy: copy_file
+    gitignore: false
+
+  - id: copilot-project-workflow-policy
+    agent: copilot
+    item_type: workflow_policy
+    scope: project
+    description: Bundle workflow policy files into .github/workflow-policy.md
+    source:
+      - workflow-policy/copilot/*.md
+    target: .github/workflow-policy.md
+    strategy: bundle
+    gitignore: false
+
+  - id: copilot-project-setup-steps
+    agent: copilot
+    item_type: setup_steps
+    scope: project
+    description: Deploy Copilot setup steps workflow to .github/workflows/
+    source:
+      - setup-steps/copilot/copilot-setup-steps.yml
+    target: .github/workflows/copilot-setup-steps.yml
+    strategy: copy_file
+    gitignore: false
+
+  - id: copilot-project-mcp
+    agent: copilot
+    item_type: mcp
+    scope: project
+    description: Merge all MCP server configs into Copilot's .vscode/mcp.json
+    source:
+      - mcp/*.json
+    target: .vscode/mcp.json
+    strategy: merge_json
+    gitignore: false
+    notes: "Copilot reads MCP servers from .vscode/mcp.json."
+
+  # Codex deployments
+  - id: codex-global-instructions
+    agent: codex
+    item_type: instructions
+    scope: global
+    description: Bundle global instructions into user's home directory AGENTS.md
+    source:
+      - instructions/global/*.md
+    target: ~/AGENTS.md
+    strategy: bundle
+    gitignore: false
+
+  - id: codex-project-instructions
+    agent: codex
+    item_type: instructions
+    scope: project
+    description: Bundle global and template instructions into project AGENTS.md
+    source:
+      - instructions/global/*.md
+      - templates/{template}/instructions/*.md
+    target: AGENTS.md
+    strategy: bundle
+    gitignore: false
+
+  - id: codex-global-config
+    agent: codex
+    item_type: settings
+    scope: global
+    description: Deploy Codex TOML configuration to global .codex/config.toml
+    source:
+      - settings/codex/config.toml
+    target: ~/.codex/config.toml
+    strategy: copy_file
+    gitignore: false
+
+  - id: codex-project-config
+    agent: codex
+    item_type: settings
+    scope: project
+    description: Deploy Codex TOML configuration to project .codex/config.toml
+    source:
+      - settings/codex/config.toml
+    target: .codex/config.toml
+    strategy: copy_file
+    gitignore: false
+
+  - id: codex-global-prompts
+    agent: codex
+    item_type: prompts
+    scope: global
+    description: Deploy Codex prompt templates to global .codex/prompts/
+    source:
+      - prompts/codex/*.md
+    target: ~/.codex/prompts/
+    strategy: copy_file
+    gitignore: false
+
+  - id: codex-global-mcp
+    agent: codex
+    item_type: mcp
+    scope: global
+    description: Render MCP servers from JSON into TOML tables within global config.toml
+    source:
+      - mcp/*.json
+    target: ~/.codex/config.toml
+    strategy: render_into_toml
+    render:
+      format: toml
+      table_prefix: "mcp_servers"
+      from_json_key: "mcpServers"
+    gitignore: false
+    notes: "Codex declares MCP servers INSIDE config.toml. Render each server from the agnostic mcp/*.json store into [mcp_servers.] TOML tables; do not overwrite non-MCP keys in config.toml."
+
+  - id: codex-project-mcp
+    agent: codex
+    item_type: mcp
+    scope: project
+    description: Render MCP servers from JSON into TOML tables within project config.toml
+    source:
+      - mcp/*.json
+    target: .codex/config.toml
+    strategy: render_into_toml
+    render:
+      format: toml
+      table_prefix: "mcp_servers"
+      from_json_key: "mcpServers"
+    gitignore: false
+    notes: "Same render-into-config.toml behavior at project scope."
+
+  # MCP deployments (agent-agnostic)
+  - id: mcp-global
+    agent: all
+    item_type: mcp
+    scope: global
+    description: Copy MCP server configs to global Orkestra configuration directory
+    source:
+      - mcp/*.json
+    target: ~/.config/orkestra/mcp/
+    strategy: copy_file
+    gitignore: false
+
+  - id: mcp-project
+    agent: all
+    item_type: mcp
+    scope: project
+    description: Copy MCP server configs to project .orkestra/mcp/ directory
+    source:
+      - mcp/*.json
+    target: .orkestra/mcp/
+    strategy: copy_file
+    gitignore: true
+
+  # Workflows (agent-agnostic)
+  - id: workflows-project
+    agent: all
+    item_type: workflows
+    scope: project
+    description: Copy workflow definitions to project .orkestra/workflows/ directory
+    source:
+      - workflows/*.yaml
+      - workflows/*.yml
+    target: .orkestra/workflows/
+    strategy: copy_file
+    gitignore: true
