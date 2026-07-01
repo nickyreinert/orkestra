@@ -807,7 +807,7 @@ function renderGlobalColumn(data) {
 
   const languageGroupSummary = document.createElement('summary');
   languageGroupSummary.className = 'templateSummary';
-  languageGroupSummary.textContent = 'Language Specific';
+  languageGroupSummary.textContent = 'Language Specific Instructions';
   languageGroupCard.appendChild(languageGroupSummary);
 
   const languageGroupBody = document.createElement('div');
@@ -920,7 +920,7 @@ function renderRenderedColumn(data) {
 
   const languageSummary = document.createElement('summary');
   languageSummary.className = 'templateSummary';
-  languageSummary.textContent = 'Language Specific';
+  languageSummary.textContent = 'Language Specific Instructions';
   languageCard.appendChild(languageSummary);
 
   const renderedTemplate = data.templateRendered;
