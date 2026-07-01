@@ -387,6 +387,19 @@ select {
   margin: 0 0 0 8px;
 }
 
+.languageSpecificCard {
+  padding-top: 6px;
+}
+
+.languageSpecificBody {
+  display: grid;
+  gap: 6px;
+}
+
+.languageSpecificBody > .templateCard {
+  margin-bottom: 0;
+}
+
 .sectionDeploy {
   display: grid;
   gap: 4px;

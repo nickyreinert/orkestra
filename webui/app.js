@@ -425,6 +425,18 @@ function renderSourceColumn(data) {
   }
   sourceColumn.appendChild(globalCard);
 
+  const languageCard = document.createElement('details');
+  languageCard.className = 'templateCard languageSpecificCard';
+  languageCard.open = true;
+
+  const languageSummary = document.createElement('summary');
+  languageSummary.className = 'templateSummary';
+  languageSummary.textContent = 'Language Specific Instructions';
+  languageCard.appendChild(languageSummary);
+
+  const languageBody = document.createElement('div');
+  languageBody.className = 'languageSpecificBody';
+
   (data.templatesSource || []).forEach((t) => {
     const card = document.createElement('details');
     card.className = 'templateCard';
@@ -484,8 +496,15 @@ function renderSourceColumn(data) {
     } else {
       card.appendChild(ul);
     }
-    sourceColumn.appendChild(card);
+    languageBody.appendChild(card);
   });
+
+  if (!languageBody.children.length) {
+    languageCard.appendChild(createEmptyMessage('No language specific templates found.'));
+  } else {
+    languageCard.appendChild(languageBody);
+  }
+  sourceColumn.appendChild(languageCard);
 
   // Extras: skills, mcp, workflows, etc.
   const extrasByCategory = {};
@@ -770,6 +789,30 @@ function renderGlobalColumn(data) {
     return;
   }
 
+  const globalGroupCard = document.createElement('details');
+  globalGroupCard.className = 'templateCard';
+  globalGroupCard.open = true;
+
+  const globalGroupSummary = document.createElement('summary');
+  globalGroupSummary.className = 'templateSummary';
+  globalGroupSummary.textContent = 'Global Instructions';
+  globalGroupCard.appendChild(globalGroupSummary);
+
+  const globalGroupBody = document.createElement('div');
+  globalGroupBody.className = 'languageSpecificBody';
+
+  const languageGroupCard = document.createElement('details');
+  languageGroupCard.className = 'templateCard languageSpecificCard';
+  languageGroupCard.open = true;
+
+  const languageGroupSummary = document.createElement('summary');
+  languageGroupSummary.className = 'templateSummary';
+  languageGroupSummary.textContent = 'Language Specific';
+  languageGroupCard.appendChild(languageGroupSummary);
+
+  const languageGroupBody = document.createElement('div');
+  languageGroupBody.className = 'languageSpecificBody';
+
   presentCategories.forEach((category) => {
     const catCard = document.createElement('details');
     catCard.className = 'templateCard globalCategoryCard';
@@ -815,17 +858,31 @@ function renderGlobalColumn(data) {
       catCard.appendChild(agentCard);
     });
 
-    globalColumn.appendChild(catCard);
+    const isLanguageSpecific = templateNames.includes(category);
+    if (isLanguageSpecific) {
+      languageGroupBody.appendChild(catCard);
+    } else {
+      globalGroupBody.appendChild(catCard);
+    }
   });
+
+  if (!globalGroupBody.children.length) {
+    globalGroupCard.appendChild(createEmptyMessage('No global instruction files available.'));
+  } else {
+    globalGroupCard.appendChild(globalGroupBody);
+  }
+  globalColumn.appendChild(globalGroupCard);
+
+  if (!languageGroupBody.children.length) {
+    languageGroupCard.appendChild(createEmptyMessage('No language specific instruction files available.'));
+  } else {
+    languageGroupCard.appendChild(languageGroupBody);
+  }
+  globalColumn.appendChild(languageGroupCard);
 }
 
 function renderRenderedColumn(data) {
   renderedColumn.innerHTML = '';
-
-  if (!data.renderedAvailable) {
-    renderedColumn.appendChild(createEmptyMessage('Project is not initialized yet.'));
-    return;
-  }
 
   const globalCard = document.createElement('details');
   globalCard.className = 'templateCard';
@@ -833,26 +890,46 @@ function renderRenderedColumn(data) {
 
   const globalSummary = document.createElement('summary');
   globalSummary.className = 'templateSummary';
-  globalSummary.textContent = 'Global (Rendered)';
+  globalSummary.textContent = 'Global Instructions';
   globalCard.appendChild(globalSummary);
 
   const globalList = document.createElement('ul');
-  (data.globalRendered || []).forEach((name) => {
-    const path = renderedPathForGlobalInstruction(name);
-    if (!activeAgentFilter || matchesRenderedAgent(path, activeAgentFilter)) {
-      addFileButton(globalList, { location: 'rendered', path });
-    }
-  });
+
+  if (data.renderedAvailable) {
+    (data.globalRendered || []).forEach((name) => {
+      const path = renderedPathForGlobalInstruction(name);
+      if (!activeAgentFilter || matchesRenderedAgent(path, activeAgentFilter)) {
+        addFileButton(globalList, { location: 'rendered', path });
+      }
+    });
+  }
+
   if (!globalList.children.length) {
-    globalCard.appendChild(createEmptyMessage('No rendered global files.'));
+    const globalMessage = data.renderedAvailable
+      ? 'No rendered global files.'
+      : 'Project is not initialized yet.';
+    globalCard.appendChild(createEmptyMessage(globalMessage));
   } else {
     globalCard.appendChild(globalList);
   }
   renderedColumn.appendChild(globalCard);
 
+  const languageCard = document.createElement('details');
+  languageCard.className = 'templateCard languageSpecificCard';
+  languageCard.open = true;
+
+  const languageSummary = document.createElement('summary');
+  languageSummary.className = 'templateSummary';
+  languageSummary.textContent = 'Language Specific';
+  languageCard.appendChild(languageSummary);
+
   const renderedTemplate = data.templateRendered;
-  if (!renderedTemplate) {
-    renderedColumn.appendChild(createEmptyMessage('No rendered template data.'));
+  if (!data.renderedAvailable || !renderedTemplate) {
+    const languageMessage = data.renderedAvailable
+      ? 'No rendered template data.'
+      : 'Project is not initialized yet.';
+    languageCard.appendChild(createEmptyMessage(languageMessage));
+    renderedColumn.appendChild(languageCard);
     return;
   }
 
@@ -883,7 +960,11 @@ function renderRenderedColumn(data) {
     templateCard.appendChild(ul);
   }
 
-  renderedColumn.appendChild(templateCard);
+  const languageBody = document.createElement('div');
+  languageBody.className = 'languageSpecificBody';
+  languageBody.appendChild(templateCard);
+  languageCard.appendChild(languageBody);
+  renderedColumn.appendChild(languageCard);
 }
 
 function setButtonStates() {
