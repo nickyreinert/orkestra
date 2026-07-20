@@ -32,13 +32,18 @@ ${ORK_BOLD}USAGE${ORK_NC}
 ${ORK_BOLD}COMMANDS${ORK_NC}
   init        scaffold .orkestra/ + agent files in a project
   render      re-render agent files from current sources
-    webui       run Orkestra WebUI server
-  list        list templates|agents
+  webui       run Orkestra WebUI server
+  ui          alias for webui
+  list        list templates|agents|entities
+  enable      install an entity into a scope
+  disable     remove an entity from a scope
+  status      show active scope and installed entities
   add-agent   enable an agent in the current project
   remove-agent disable an agent in the current project
   add-template scaffold a new template in your user dir
   update      pull latest distribution and re-render
   suggest     diff a remote markdown URL against current sources
+  hooks       manage quality hooks (install, add, remove, run)
   mcp         run Orkestra MCP server (stdio)
   doctor      check installation & project health
   version     print version
@@ -79,6 +84,7 @@ interactive_menu() {
         "Start WebUI (current project)" \
         "List available templates" \
         "List available agents" \
+        "Manage quality hooks" \
         "Run doctor checks" \
         "Quit"
     case "$choice" in
@@ -87,6 +93,7 @@ interactive_menu() {
         "Start WebUI (current project)") exec "$0" webui ;;
         "List available templates") exec "$0" list templates ;;
         "List available agents")    exec "$0" list agents ;;
+        "Manage quality hooks")     exec "$0" hooks ;;
         "Run doctor checks")        exec "$0" doctor ;;
         *) exit 0 ;;
     esac
@@ -102,8 +109,12 @@ case "$cmd" in
     add-template) "$ORK_HOME/lib/cli/add-template.sh" "$@" ;;
     update)    "$ORK_HOME/lib/cli/update.sh"    "$@" ;;
     suggest)   "$ORK_HOME/lib/cli/suggest.sh"   "$@" ;;
+    hooks)     "$ORK_HOME/lib/cli/hooks.sh"     "$@" ;;
     mcp)       "$ORK_HOME/lib/cli/mcp.sh"       "$@" ;;
-    webui)     "$ORK_HOME/lib/cli/webui.sh"     "$@" ;;
+    webui|ui)  "$ORK_HOME/lib/cli/webui.sh"     "$@" ;;
+    enable)    "$ORK_HOME/lib/cli/enable.sh"    "$@" ;;
+    disable)   "$ORK_HOME/lib/cli/disable.sh"   "$@" ;;
+    status)    "$ORK_HOME/lib/cli/status.sh"    "$@" ;;
     doctor)    "$ORK_HOME/lib/cli/doctor.sh"    "$@" ;;
     version|-v|--version) printf "orkestra %s\n" "$ORK_VERSION" ;;
     help|-h|--help) usage ;;

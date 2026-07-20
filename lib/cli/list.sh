@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# orkestra list templates|agents
+# orkestra list templates|agents|entities
 set -euo pipefail
 source "$ORK_HOME/lib/ui/colors.sh"
 source "$ORK_HOME/lib/core/paths.sh"
+source "$ORK_HOME/lib/core/entities.sh"
 
 what="${1:-}"
 case "$what" in
@@ -23,6 +24,16 @@ case "$what" in
             printf "  %s%s%s\n" "$ORK_CYAN" "$a" "$ORK_NC"
         done < <(ork_list_agents)
         ;;
+    entities|entity)
+        ork_header "Entities"
+        while IFS= read -r id; do
+            [[ -z "$id" ]] && continue
+            file="$(ork_entity_source_path "$id")"
+            name="$(ork_entity_yaml_value "$file" "name")"
+            category="$(ork_entity_yaml_value "$file" "category")"
+            printf "  %s%-28s%s %-12s %s\n" "$ORK_CYAN" "$id" "$ORK_NC" "$category" "$name"
+        done < <(ork_list_entities)
+        ;;
     *)
-        ork_error "Usage: orkestra list templates|agents"; exit 1 ;;
+        ork_error "Usage: orkestra list templates|agents|entities"; exit 1 ;;
 esac

@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# orkestra init [--template T] [--agents a,b,c] [--here|--dir NAME] [-y]
+# orkestra init [--template T] [--agents a,b,c] [--here|--dir NAME] [--hooks] [-y]
 # Scaffolds .orkestra/ + agent files for a project.
 set -euo pipefail
 source "$ORK_HOME/lib/ui/colors.sh"
 source "$ORK_HOME/lib/ui/menu.sh"
 source "$ORK_HOME/lib/core/paths.sh"
 source "$ORK_HOME/lib/core/manifest.sh"
+source "$ORK_HOME/lib/core/hooks.sh"
+source "$ORK_HOME/lib/core/entities.sh"
 
 template=""
 agents_csv=""
 target_mode=""
 target_name=""
+install_hooks=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -18,15 +21,17 @@ while [[ $# -gt 0 ]]; do
         --agents)   agents_csv="$2"; shift 2 ;;
         --here)     target_mode="here"; shift ;;
         --dir)      target_mode="dir"; target_name="$2"; shift 2 ;;
+        --hooks)    install_hooks="yes"; shift ;;
         -y|--yes)   export ORK_YES=1; shift ;;
         --dry-run)  export ORK_DRY_RUN=1; shift ;;
         -h|--help)
             cat <<EOF
-orkestra init [--template T] [--agents a,b,c] [--here|--dir NAME] [-y]
+orkestra init [--template T] [--agents a,b,c] [--here|--dir NAME] [--hooks] [-y]
 
 Scaffolds an Orkestra-managed project:
   - .orkestra/ (manifest, flow, state, config)
   - rendered agent files (e.g. .github/copilot-instructions.md)
+  - optional: quality hooks (pre-commit, commit-msg, pre-push)
 
 Without flags, runs an interactive wizard.
 EOF
@@ -74,11 +79,19 @@ else
     [[ ${#agents[@]} -gt 0 ]] || ork_die "Select at least one agent"
 fi
 
+# 3b. Quality hooks (optional)
+if [[ -z "$install_hooks" ]]; then
+    choice=""
+    ork_menu "Install quality hooks?" choice "Yes" "No"
+    [[ "$choice" == "Yes" ]] && install_hooks="yes" || install_hooks="no"
+fi
+
 # 4. Plan
 ork_header "Plan"
 printf "  target   : %s\n" "$target_dir"
 printf "  template : %s\n" "$template"
 printf "  agents   : %s\n" "${agents[*]}"
+printf "  hooks    : %s\n" "$install_hooks"
 [[ "${ORK_DRY_RUN:-0}" == "1" ]] && { ork_dim "(dry-run)"; exit 0; }
 ork_confirm "Proceed?" default-yes || { ork_warn "aborted"; exit 1; }
 
@@ -109,10 +122,26 @@ EOF
 agents_lines=""
 for a in "${agents[@]}"; do agents_lines+="$a"$'\n'; done
 ork_manifest_init "$target_dir" "$template" "$agents_lines"
+ork_write_agents_index "project" "$target_dir"
+ork_write_agent_hooks "project" "$target_dir" "${agents[@]}"
 
 # 6. Render
 ork_info "rendering"
 ( cd "$target_dir" && ORK_HOME="$ORK_HOME" "$ORK_HOME/bin/orkestra" render )
+
+# 6b. Install hooks if requested
+if [[ "$install_hooks" == "yes" ]]; then
+    ork_info "installing hooks"
+    # Default hooks for all projects: check secrets, validate commit format, block main push
+    ork_hooks_manifest_write "$target_dir" \
+        "pre-commit" "common/check-secrets" \
+        "commit-msg" "common/validate-commit-msg" \
+        "pre-push" "common/block-main-push"
+    ork_hooks_install_runner "$target_dir"
+    ork_hooks_install_dispatchers "$target_dir"
+    ork_manifest_set_hooks_installed "$target_dir"
+    ork_ok "hooks installed"
+fi
 
 # 7. .vscode tasks (optional)
 if [[ -f "$ORK_HOME/.vscode/tasks.json" && ! -f "$target_dir/.vscode/tasks.json" ]]; then

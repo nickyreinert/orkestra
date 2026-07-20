@@ -34,3 +34,15 @@ ork_manifest_init() {
 ork_manifest_path() {
     printf "%s\n" "$1/.orkestra/manifest.yaml"
 }
+
+# Append a "hooks_installed: true" marker to manifest.yaml after hook install.
+ork_manifest_set_hooks_installed() {
+    local project="$1"
+    local mf; mf="$(ork_manifest_path "$project")"
+    [[ -f "$mf" ]] || return 0
+    if grep -q '^hooks_installed:' "$mf" 2>/dev/null; then
+        sed -i.bak 's/^hooks_installed:.*/hooks_installed: true/' "$mf" && rm -f "${mf}.bak"
+    else
+        printf "hooks_installed: true\n" >> "$mf"
+    fi
+}

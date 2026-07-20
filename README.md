@@ -67,7 +67,10 @@ orkestra init --template python-flask --agents copilot,claude --here -y
 orkestra                              interactive top-level menu
 orkestra init        [--template T] [--agents a,b,c] [--here|--dir N] [-y]
 orkestra render      [--agent a] [--dry-run]
-orkestra list        templates|agents
+orkestra list        templates|agents|entities
+orkestra enable      <entity> [--scope project|global] [--agents a,b,c]
+orkestra disable     <entity> [--scope project|global]
+orkestra status      [--scope project|global]
 orkestra add-agent    <name>
 orkestra remove-agent <name>
 orkestra add-template <name>
@@ -80,8 +83,21 @@ orkestra version
 
 Global flags: `-y/--yes`, `--quiet`, `--dry-run`.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model (sources →
-adapters → targets, manifest format, supervisor instruction).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model.
+
+## Entity Model
+
+Orkestra can install reusable guidance entities from `content/source/` into a
+scope-specific `AGENTS.md` index:
+
+- Source scope: shipped read-only entities under `content/source/`
+- Global scope: user-wide entities under the platform-specific Orkestra data dir
+- Project scope: repository-local entities under `.orkestra/`
+
+Project agent files such as `AGENTS.md`, `CLAUDE.md`, and
+`.github/copilot/instructions.md` are thin hooks that import
+`.orkestra/AGENTS.md`. The actual installed entity content lives under
+`.orkestra/entities/`.
 
 ## WebUI Global Mode Settings
 

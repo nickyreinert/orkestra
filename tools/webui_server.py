@@ -20,13 +20,13 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI_DIR = ROOT / "webui"
-TEMPLATES_DIR = ROOT / "templates"
+TEMPLATES_DIR = ROOT / "content" / "templates"
 ADAPTERS_DIR = ROOT / "adapters"
 PROJECT_DIR = Path.cwd()
 HOME_DIR = Path.home()
-DEFAULT_GLOBAL_SETTINGS_PATH = ROOT / "settings" / "global-locations.yaml"
+DEFAULT_GLOBAL_SETTINGS_PATH = ROOT / "content" / "settings" / "global-locations.yaml"
 USER_GLOBAL_SETTINGS_PATH = HOME_DIR / ".config" / "orkestra" / "settings.yaml"
-DEFAULT_AGENTS_CONFIG_PATH = ROOT / "settings" / "agents-config.yaml"
+DEFAULT_AGENTS_CONFIG_PATH = ROOT / "content" / "settings" / "agents-config.yaml"
 USER_AGENTS_CONFIG_PATH = HOME_DIR / ".config" / "orkestra" / "agents-config.yaml"
 HOST = os.environ.get("ORKESTRA_WEBUI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ORKESTRA_WEBUI_PORT", "8732"))
@@ -144,9 +144,10 @@ def collect_global_files(base: Path) -> list[str]:
 
 def collect_extras() -> list[dict]:
     roots = [
-        (ROOT / "skills", "skills"),
-        (ROOT / "mcp", "mcp"),
-        (ROOT / "workflows", "workflows"),
+        (ROOT / "content" / "source", "entities"),
+        (ROOT / "content" / "skills", "skills"),
+        (ROOT / "content" / "mcp", "mcp"),
+        (ROOT / "content" / "workflows", "workflows"),
     ]
     out: list[dict] = []
     allowed_ext = {".md", ".txt", ".json", ".yaml", ".yml", ".sh"}
@@ -613,11 +614,11 @@ def can_write_path(mode: str, rel: str, candidate: Path) -> tuple[bool, str | No
 
 
 def is_source_write_allowed(parts: tuple[str, ...]) -> bool:
-    if len(parts) >= 3 and parts[0] == "templates" and safe_name(parts[1]):
+    if len(parts) >= 4 and parts[0] == "content" and parts[1] == "templates" and safe_name(parts[2]):
         return True
-    if len(parts) >= 3 and parts[0] == "instructions" and parts[1] == "global":
+    if len(parts) >= 4 and parts[0] == "content" and parts[1] == "instructions" and parts[2] == "global":
         return True
-    if len(parts) >= 1 and parts[0] in {"skills", "mcp", "workflows"}:
+    if len(parts) >= 2 and parts[0] == "content" and parts[1] in {"skills", "mcp", "workflows"}:
         return True
     return False
 
@@ -635,11 +636,11 @@ def is_rendered_read_allowed(rel: str) -> bool:
 
 
 def map_source_to_rendered(rel: str) -> str | None:
-    if rel.startswith("instructions/global/"):
+    if rel.startswith("content/instructions/global/"):
         name = rel.split("/", 2)[2]
         return f".orkestra/instructions/global/{name}"
 
-    m = re.fullmatch(r"templates/[^/]+/instructions/(.+)", rel)
+    m = re.fullmatch(r"content/templates/[^/]+/instructions/(.+)", rel)
     if m:
         return f".orkestra/instructions/template/{m.group(1)}"
 
@@ -647,8 +648,8 @@ def map_source_to_rendered(rel: str) -> str | None:
 
 
 def compose_template_instruction_bundle(template: str) -> str:
-    global_dir = ROOT / "instructions" / "global"
-    template_dir = ROOT / "templates" / template / "instructions"
+    global_dir = ROOT / "content" / "instructions" / "global"
+    template_dir = ROOT / "content" / "templates" / template / "instructions"
 
     sections: list[str] = []
 
@@ -1029,7 +1030,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "templatesSource": collect_templates(TEMPLATES_DIR),
                     "templateRendered": collect_rendered_template(),
-                    "globalSource": collect_global_files(ROOT / "instructions" / "global"),
+                    "globalSource": collect_global_files(ROOT / "content" / "instructions" / "global"),
                     "globalRendered": collect_global_files(rendered_global_dir),
                     "globalByAgent": global_by_agent,
                     "extras": collect_extras(),
@@ -1181,7 +1182,7 @@ class Handler(BaseHTTPRequestHandler):
                     # Legacy compatibility - keep these for now
                     "templatesSource": collect_templates(TEMPLATES_DIR),
                     "templateRendered": collect_rendered_template(),
-                    "globalSource": collect_global_files(ROOT / "instructions" / "global"),
+                    "globalSource": collect_global_files(ROOT / "content" / "instructions" / "global"),
                     "globalRendered": collect_global_files(rendered_global_dir),
                     "globalByAgent": {
                         agent: sorted(files.keys())

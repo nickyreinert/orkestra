@@ -5,6 +5,7 @@ set -euo pipefail
 source "$ORK_HOME/lib/ui/colors.sh"
 source "$ORK_HOME/lib/core/paths.sh"
 source "$ORK_HOME/lib/core/manifest.sh"
+source "$ORK_HOME/lib/core/entities.sh"
 
 filter_agent=""
 while [[ $# -gt 0 ]]; do
@@ -38,7 +39,7 @@ done < "$manifest"
 
 [[ ${#agents[@]} -gt 0 ]] || ork_die "No agents listed in manifest.yaml"
 
-src_global="$ORK_HOME/instructions/global"
+src_global="$ORK_HOME/content/instructions/global"
 src_template_dir="$(ork_template_dir "$template")" || ork_die "Template not found: $template"
 src_template="$src_template_dir/instructions"
 
@@ -48,6 +49,10 @@ printf "  agents   : %s\n" "${agents[*]}"
 printf "  globals  : %s\n" "$src_global"
 printf "  template : %s\n" "$src_template"
 [[ "${ORK_DRY_RUN:-0}" == "1" ]] && { ork_dim "(dry-run, no files written)"; exit 0; }
+
+ork_info "refreshing entity index and agent hooks"
+ork_write_agents_index "project" "$project"
+ork_write_agent_hooks "project" "$project" "${agents[@]}"
 
 # Always run the generic adapter so .orkestra/instructions/ stays fresh.
 ork_info "rendering generic mirror"

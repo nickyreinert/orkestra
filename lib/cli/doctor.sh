@@ -23,8 +23,8 @@ check "bash >= 4 or modern macOS bash" "[[ \${BASH_VERSINFO[0]} -ge 3 ]]"
 check "git on PATH" "command -v git" "install git"
 check "shasum or sha256sum available" "command -v shasum || command -v sha256sum"
 check "ORK_HOME exists ($ORK_HOME)" "[[ -d \"$ORK_HOME\" ]]"
-check "templates/ present" "[[ -d \"$ORK_HOME/templates\" ]]"
-check "instructions/global present" "[[ -d \"$ORK_HOME/instructions/global\" ]]"
+check "content/templates/ present" "[[ -d \"$ORK_HOME/content/templates\" ]]"
+check "content/instructions/global present" "[[ -d \"$ORK_HOME/content/instructions/global\" ]]"
 check "adapters/ present" "[[ -d \"$ORK_HOME/adapters\" ]]"
 
 # Project-level checks

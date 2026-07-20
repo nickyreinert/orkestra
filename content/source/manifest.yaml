@@ -1,0 +1,6 @@
+# Orkestra source entity manifest.
+# Source scope is read-only for users; global and project scopes install copies.
+entities:
+  - styles.clean-code
+  - skills.security-baseline
+  - workflows.trunk

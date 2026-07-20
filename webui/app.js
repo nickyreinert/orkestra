@@ -90,7 +90,7 @@ function ensureSourceDeployState(data) {
   }
 
   (data.globalSource || []).forEach((name) => {
-    const p = 'instructions/global/' + name;
+    const p = 'content/instructions/global/' + name;
     if (typeof sourceDeployState.globalFiles[p] !== 'boolean') {
       sourceDeployState.globalFiles[p] = true;
     }
@@ -289,13 +289,13 @@ function shortPathLabel(relPath) {
   const globalPath = relPath.match(/^global\/[^/]+\/(.+)$/);
   if (globalPath) return globalPath[1];
 
-  const templateInstruction = relPath.match(/^templates\/[^/]+\/instructions\/(.+)$/);
+  const templateInstruction = relPath.match(/^content\/templates\/[^/]+\/instructions\/(.+)$/);
   if (templateInstruction) return templateInstruction[1];
 
-  const templateRoot = relPath.match(/^templates\/[^/]+\/(template\.yaml)$/);
+  const templateRoot = relPath.match(/^content\/templates\/[^/]+\/(template\.yaml)$/);
   if (templateRoot) return templateRoot[1];
 
-  const globalSource = relPath.match(/^instructions\/global\/(.+)$/);
+  const globalSource = relPath.match(/^content\/instructions\/global\/(.+)$/);
   if (globalSource) return globalSource[1];
 
   const renderedTemplate = relPath.match(/^\.orkestra\/instructions\/template\/(.+)$/);
@@ -308,7 +308,7 @@ function shortPathLabel(relPath) {
 }
 
 function sourcePathForTemplateInstruction(templateName, filename) {
-  return 'templates/' + templateName + '/instructions/' + filename;
+  return 'content/templates/' + templateName + '/instructions/' + filename;
 }
 
 function renderedPathForTemplateInstruction(filename) {
@@ -398,7 +398,7 @@ function renderSourceColumn(data) {
 
   const globalList = document.createElement('ul');
   (data.globalSource || []).forEach((name) => {
-    const path = 'instructions/global/' + name;
+    const path = 'content/instructions/global/' + name;
     const li = document.createElement('li');
     li.className = 'sourceRow';
 

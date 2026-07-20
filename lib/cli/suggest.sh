@@ -39,13 +39,13 @@ fi
 
 # Pick a source to diff against.
 if [[ -z "$source_id" ]]; then
-    mapfile -t globals < <(find "$ORK_HOME/instructions/global" -maxdepth 1 -type f -name "*.md" -exec basename {} \;)
+    mapfile -t globals < <(find "$ORK_HOME/content/instructions/global" -maxdepth 1 -type f -name "*.md" -exec basename {} \;)
     pick=""
     ork_menu "Compare against which source?" pick "${globals[@]}"
     source_id="global/$pick"
 fi
 
-src_path="$ORK_HOME/instructions/$source_id"
+src_path="$ORK_HOME/content/instructions/$source_id"
 [[ -f "$src_path" ]] || ork_die "Source not found: $source_id"
 
 ork_header "Diff: $source_id  vs  $target"
