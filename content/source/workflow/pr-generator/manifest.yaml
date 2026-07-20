@@ -1,0 +1,18 @@
+id: workflow.pr-generator
+name: Context-Aware PR Generator
+category: workflow.automation
+domain: automation
+type: shell
+executable: true
+entrypoint: create-pr.sh
+version: 1.0.0
+author: orkestra-core
+description: >
+  Creates pull requests with GitHub CLI while honoring a repository PR template.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+requires_tools: [gh, git]
+tags: [github, pull-request, automation]

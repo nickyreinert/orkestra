@@ -52,19 +52,11 @@ def watch_signature(paths: list[Path]) -> str:
 
 SERVER_SIGNATURE = watch_signature(SERVER_WATCH_FILES)
 ENTITY_CATEGORY_TREE = [
-    ("agent", "AGENT", [("agent.profiles", "profiles"), ("agent.tooling", "tooling")]),
-    (
-        "coding",
-        "CODING",
-        [
-            ("coding.standards", "standards"),
-            ("coding.architecture", "architecture"),
-            ("coding.domain", "domain"),
-        ],
-    ),
-    ("projects", "PROJECTS", [("projects.blueprints", "blueprints")]),
-    ("enforcement", "ENFORCEMENT", [("enforcement.policies", "policies"), ("enforcement.hooks", "hooks")]),
-    ("automation", "AUTOMATION", [("automation.scripts", "scripts"), ("automation.workflows", "workflows")]),
+    ("core", "CORE & PLATFORM", [("core.platform", "platform")]),
+    ("agent", "AGENT", [("agent.persona", "persona"), ("agent.capabilities", "capabilities")]),
+    ("topology", "TOPOLOGY", [("topology.blueprints", "blueprints")]),
+    ("standards", "STANDARDS", [("standards.code", "code"), ("standards.design", "design")]),
+    ("workflow", "WORKFLOWS", [("workflow.automation", "automation")]),
 ]
 DOMAIN_META = {
     "guidance": {"label": "Guidance", "indicator": "◇"},
@@ -236,6 +228,16 @@ def normalize_entity_category(category: str) -> str:
         "agent-style": "agent.profiles",
         "agent-styles": "agent.profiles",
         "general": "enforcement.policies",
+        "agent.profiles": "agent.persona",
+        "agent.tooling": "agent.capabilities",
+        "projects.blueprints": "topology.blueprints",
+        "coding.standards": "standards.code",
+        "coding.architecture": "standards.design",
+        "coding.domain": "standards.design",
+        "enforcement.policies": "core.platform",
+        "enforcement.hooks": "workflow.automation",
+        "automation.scripts": "workflow.automation",
+        "automation.workflows": "workflow.automation",
     }
     return aliases.get(category, category)
 
@@ -306,10 +308,13 @@ def parse_entity_file(path: Path) -> dict | None:
     if not entity_id:
         return None
 
-    category = normalize_entity_category(str(data.get("category") or entity_id.split(".", 1)[0]))
+    plugin_dir = path.parent if path.name == "manifest.yaml" else None
+    instruction_file = plugin_dir / "instructions.md" if plugin_dir else None
+    category = normalize_entity_category(str(data.get("category") or entity_id.rsplit(".", 1)[0]))
     rel_path = path.relative_to(ROOT).as_posix()
-    content = str(data.get("content") or "")
-    compatibility = data.get("compatibility") if isinstance(data.get("compatibility"), dict) else {}
+    content = instruction_file.read_text(encoding="utf-8") if instruction_file and instruction_file.is_file() else str(data.get("content") or "")
+    compatibility_raw = data.get("compatibility")
+    compatibility = compatibility_raw if isinstance(compatibility_raw, dict) else {}
 
     def list_value(value) -> list[str]:
         if isinstance(value, list):
@@ -318,6 +323,14 @@ def parse_entity_file(path: Path) -> dict | None:
             return [v.strip() for v in value.strip("[]").split(",") if v.strip()]
         return []
 
+    plugin_scripts = sorted((plugin_dir / "bin").glob("*.sh")) if plugin_dir and (plugin_dir / "bin").is_dir() else []
+    plugin_configs = []
+    if plugin_dir:
+        plugin_configs.extend(item.name for item in (plugin_dir / "config.json", plugin_dir / "config.yaml", plugin_dir / "config.yml") if item.is_file())
+        if (plugin_dir / "config").is_dir():
+            plugin_configs.extend(item.relative_to(plugin_dir).as_posix() for item in sorted((plugin_dir / "config").rglob("*")) if item.is_file())
+    agents = list_value(compatibility.get("agents")) if compatibility else list_value(compatibility_raw)
+    plugin_type = str(data.get("type") or ("shell" if plugin_scripts else "markdown"))
     return {
         "id": entity_id,
         "name": str(data.get("name") or entity_id),
@@ -325,15 +338,15 @@ def parse_entity_file(path: Path) -> dict | None:
         "categoryMain": category.split(".", 1)[0] if "." in category else category,
         "categorySub": category.split(".", 1)[1] if "." in category else "",
         "domain": str(data.get("domain") or "guidance"),
-        "type": str(data.get("type") or "markdown"),
-        "executable": bool(data.get("executable") is True or str(data.get("executable")).lower() == "true"),
+        "type": plugin_type,
+        "executable": bool(plugin_scripts or data.get("executable") is True or str(data.get("executable")).lower() == "true"),
         "runtime": str(data.get("runtime") or ""),
-        "entrypoint": str(data.get("entrypoint") or ""),
+        "entrypoint": str(data.get("entrypoint") or (plugin_scripts[0].name if plugin_scripts else "")),
         "version": str(data.get("version") or ""),
         "author": str(data.get("author") or ""),
         "description": str(data.get("description") or "").strip(),
         "descriptionShort": str(data.get("description_short") or data.get("description") or "").strip(),
-        "agents": list_value(compatibility.get("agents")),
+        "agents": agents,
         "scopes": list_value(compatibility.get("scopes")),
         "os": list_value(compatibility.get("os")),
         "requiresTools": list_value(data.get("requires_tools")),
@@ -342,6 +355,9 @@ def parse_entity_file(path: Path) -> dict | None:
         "tags": list_value(data.get("tags")),
         "content": content,
         "path": rel_path,
+        "pluginFormat": "directory" if plugin_dir else "legacy-file",
+        "configAssets": plugin_configs,
+        "scriptAssets": [item.name for item in plugin_scripts],
     }
 
 
@@ -421,7 +437,10 @@ def write_plugin_metadata(source_file: Path, data: dict) -> None:
     if any(key in data for key in ("agents", "scopes", "os")):
         raw = replace_yaml_compatibility(raw, data.get("agents", []), data.get("scopes", []), data.get("os", []))
     raw = replace_yaml_block(raw, "description", str(data.get("description", "")))
-    raw = replace_yaml_block(raw, "content", str(data.get("content", "")))
+    if source_file.name == "manifest.yaml":
+        (source_file.parent / "instructions.md").write_text(str(data.get("content", "")), encoding="utf-8")
+    else:
+        raw = replace_yaml_block(raw, "content", str(data.get("content", "")))
     source_file.write_text(raw, encoding="utf-8")
 
 
@@ -437,8 +456,9 @@ def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
     entity_id = f"{category}.{slug}"
     if find_entity_source_file(entity_id):
         raise ValueError("A plugin with this id already exists")
-    source_file = ROOT / "content" / "source" / main / sub / f"{slug}.yaml"
-    source_file.parent.mkdir(parents=True, exist_ok=True)
+    plugin_dir = ROOT / "content" / "source" / main / sub / slug
+    source_file = plugin_dir / "manifest.yaml"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
     executable = plugin_type == "shell"
     runtime = "bash" if executable else ""
     entrypoint = f"{slug}.sh" if executable else ""
@@ -464,13 +484,14 @@ def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
         "requires: []",
         "requires_tools: []",
         "tags: [custom]",
-        "content: |",
-        *[f"  {line}" if line else "" for line in content.splitlines()],
         "",
     ])
     source_file.write_text(raw, encoding="utf-8")
+    (plugin_dir / "instructions.md").write_text(content, encoding="utf-8")
     if executable:
-        script_path = source_file.parent / entrypoint
+        script_dir = plugin_dir / "bin"
+        script_dir.mkdir(exist_ok=True)
+        script_path = script_dir / entrypoint
         script_path.write_text(content, encoding="utf-8")
         script_path.chmod(0o755)
     return parse_entity_file(source_file) or {}
@@ -484,7 +505,7 @@ def entity_installed_path(scope: str, entity_id: str) -> Path:
         elif os.name == "nt":
             base = Path(os.environ.get("APPDATA", str(HOME_DIR / "AppData" / "Roaming"))) / "orkestra"
         else:
-            base = HOME_DIR / ".orkestra"
+            base = HOME_DIR / ".config" / "orkestra"
     else:
         base = PROJECT_DIR / ".orkestra"
     return base / "entities" / rel
@@ -496,7 +517,7 @@ def entity_scope_dir(scope: str) -> Path:
             return HOME_DIR / "Library" / "Application Support" / "orkestra"
         if os.name == "nt":
             return Path(os.environ.get("APPDATA", str(HOME_DIR / "AppData" / "Roaming"))) / "orkestra"
-        return HOME_DIR / ".orkestra"
+        return HOME_DIR / ".config" / "orkestra"
     return PROJECT_DIR / ".orkestra"
 
 
@@ -507,8 +528,8 @@ def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
     content = str(entity.get("content") or "").rstrip()
     lines = [f"<!-- orkestra:entity id={entity['id']} source={source_rel} -->", content]
     if entity.get("type") == "shell" and entity.get("entrypoint"):
-        lines.extend(["", f"Script: `scripts/{entity['entrypoint']}`"])
-        script_path = entity_scope_dir(scope) / "scripts" / str(entity["entrypoint"])
+        lines.extend(["", f"Tool: `bin/{entity['entrypoint']}`"])
+        script_path = entity_scope_dir(scope) / "bin" / str(entity["entrypoint"])
         script_path.parent.mkdir(parents=True, exist_ok=True)
         script_path.write_text(str(entity.get("content") or ""), encoding="utf-8")
         script_path.chmod(0o755)
@@ -1726,7 +1747,9 @@ class Handler(BaseHTTPRequestHandler):
             if "source" in targets:
                 write_plugin_metadata(source_file, data)
                 if plugin_type == "shell":
-                    script_file = source_file.parent / str(data["entrypoint"])
+                    script_dir = source_file.parent / "bin" if source_file.name == "manifest.yaml" else source_file.parent
+                    script_dir.mkdir(parents=True, exist_ok=True)
+                    script_file = script_dir / str(data["entrypoint"])
                     script_file.write_text(str(data.get("content") or ""), encoding="utf-8")
                     script_file.chmod(0o755)
 
@@ -1797,6 +1820,15 @@ class Handler(BaseHTTPRequestHandler):
             if source_entity.get("category") == category:
                 return self._send_json({"ok": True, "entities": collect_entities_index()})
             main, _, sub = category.partition(".")
+            if source_file.name == "manifest.yaml":
+                destination_dir = ROOT / "content" / "source" / main / sub / source_file.parent.name
+                if destination_dir.exists():
+                    return self._send_json({"error": "A plugin with that directory already exists in the destination"}, status=409)
+                raw = replace_yaml_value(source_file.read_text(encoding="utf-8"), "category", category)
+                source_file.write_text(raw, encoding="utf-8")
+                destination_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source_file.parent), str(destination_dir))
+                return self._send_json({"ok": True, "entities": collect_entities_index()})
             destination = ROOT / "content" / "source" / main / sub / source_file.name
             if destination != source_file and destination.exists():
                 return self._send_json({"error": "A plugin with that filename already exists in the destination"}, status=409)

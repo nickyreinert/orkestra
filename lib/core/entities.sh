@@ -13,7 +13,7 @@ ork_global_scope_dir() {
     case "$(uname -s 2>/dev/null || printf unknown)" in
         Darwin) printf "%s\n" "$HOME/Library/Application Support/orkestra" ;;
         MINGW*|MSYS*|CYGWIN*) printf "%s\n" "${APPDATA:-$HOME/AppData/Roaming}/orkestra" ;;
-        *) printf "%s\n" "$HOME/.orkestra" ;;
+        *) printf "%s\n" "$HOME/.config/orkestra" ;;
     esac
 }
 
@@ -35,6 +35,11 @@ ork_agents_index_path() {
 ork_entities_install_dir() {
     local scope="${1:-project}" project="${2:-$(pwd)}"
     printf "%s/entities\n" "$(ork_scope_dir "$scope" "$project")"
+}
+
+ork_plugin_assets_dir() {
+    local scope="$1" project="$2"
+    printf "%s\n" "$(ork_scope_dir "$scope" "$project")"
 }
 
 ork_entity_rel_path() {
@@ -62,15 +67,45 @@ ork_entity_source_path() {
         general) plural="general" ;;
     esac
 
+    local plugin_dir="$ORK_SOURCE_DIR/$(printf "%s" "$id" | tr "." "/")"
     local direct="$ORK_SOURCE_DIR/$plural/$name.yaml"
     local nested="$ORK_SOURCE_DIR/$(printf "%s" "$id" | tr "." "/").yaml"
-    if [[ -f "$nested" ]]; then
+    if [[ -f "$plugin_dir/manifest.yaml" ]]; then
+        printf "%s\n" "$plugin_dir/manifest.yaml"
+    elif [[ -f "$nested" ]]; then
         printf "%s\n" "$nested"
     elif [[ -f "$direct" ]]; then
         printf "%s\n" "$direct"
     else
+        local candidate candidate_id
+        while IFS= read -r candidate; do
+            candidate_id="$(awk -F': *' '/^id:/{print $2; exit}' "$candidate")"
+            if [[ "$candidate_id" == "$id" ]]; then
+                printf "%s\n" "$candidate"
+                return 0
+            fi
+        done < <(find "$ORK_SOURCE_DIR" -type f \( -name "manifest.yaml" -o -name "*.yaml" -o -name "*.yml" \) | sort)
         return 1
     fi
+}
+
+ork_entity_plugin_dir() {
+    local file="$1"
+    if [[ "$(basename "$file")" == "manifest.yaml" ]]; then
+        dirname "$file"
+    else
+        dirname "$file"
+    fi
+}
+
+ork_entity_instruction_path() {
+    local file="$1" plugin_dir
+    plugin_dir="$(ork_entity_plugin_dir "$file")"
+    if [[ "$(basename "$file")" == "manifest.yaml" && -f "$plugin_dir/instructions.md" ]]; then
+        printf "%s\n" "$plugin_dir/instructions.md"
+        return 0
+    fi
+    return 1
 }
 
 ork_entity_yaml_value() {
@@ -111,7 +146,8 @@ ork_entity_yaml_block() {
 
 ork_list_entities() {
     [[ -d "$ORK_SOURCE_DIR" ]] || return 0
-    find "$ORK_SOURCE_DIR" -mindepth 2 -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "manifest.yaml" | sort | while IFS= read -r f; do
+    find "$ORK_SOURCE_DIR" -mindepth 2 -type f \( -name "*.yaml" -o -name "*.yml" \) | sort | while IFS= read -r f; do
+        [[ "$(basename "$f")" == "manifest.yaml" || "$f" != "$ORK_SOURCE_DIR/manifest.yaml" ]] || continue
         local id
         id="$(ork_entity_yaml_value "$f" "id")"
         [[ -n "$id" ]] && printf "%s\n" "$id"
@@ -120,7 +156,12 @@ ork_list_entities() {
 
 ork_entity_script_source_path() {
     local file="$1" entrypoint="$2"
-    local local_script
+    local local_script plugin_dir
+    plugin_dir="$(ork_entity_plugin_dir "$file")"
+    if [[ -f "$plugin_dir/bin/$entrypoint" ]]; then
+        printf "%s\n" "$plugin_dir/bin/$entrypoint"
+        return 0
+    fi
     local_script="$(dirname "$file")/$entrypoint"
     if [[ -f "$local_script" ]]; then
         printf "%s\n" "$local_script"
@@ -142,7 +183,7 @@ ork_entity_install_script_if_needed() {
 
     [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
     script_src="$(ork_entity_script_source_path "$file" "$entrypoint")" || ork_die "Script entrypoint not found: $entrypoint"
-    scripts_dir="$(ork_scope_dir "$scope" "$project")/scripts"
+    scripts_dir="$(ork_scope_dir "$scope" "$project")/bin"
     script_dst="$scripts_dir/$entrypoint"
     mkdir -p "$scripts_dir"
     cp "$script_src" "$script_dst"
@@ -157,8 +198,35 @@ ork_entity_remove_script_if_needed() {
     entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
 
     [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
-    script_dst="$(ork_scope_dir "$scope" "$project")/scripts/$entrypoint"
+    script_dst="$(ork_scope_dir "$scope" "$project")/bin/$entrypoint"
     [[ -f "$script_dst" ]] && rm -f "$script_dst"
+}
+
+ork_entity_install_config_if_needed() {
+    local scope="$1" project="$2" file="$3" plugin_dir config_root config_file rel destination
+    [[ "$(basename "$file")" == "manifest.yaml" ]] || return 0
+    plugin_dir="$(ork_entity_plugin_dir "$file")"
+    config_root="$(ork_scope_dir "$scope" "$project")/config"
+    for config_file in "$plugin_dir"/config.json "$plugin_dir"/config.yaml "$plugin_dir"/config.yml; do
+        [[ -f "$config_file" ]] || continue
+        mkdir -p "$config_root/$(basename "$plugin_dir")"
+        cp "$config_file" "$config_root/$(basename "$plugin_dir")/$(basename "$config_file")"
+    done
+    if [[ -d "$plugin_dir/config" ]]; then
+        while IFS= read -r config_file; do
+            rel="${config_file#$plugin_dir/config/}"
+            destination="$config_root/$(basename "$plugin_dir")/$rel"
+            mkdir -p "$(dirname "$destination")"
+            cp "$config_file" "$destination"
+        done < <(find "$plugin_dir/config" -type f | sort)
+    fi
+}
+
+ork_entity_remove_config_if_needed() {
+    local scope="$1" project="$2" file="$3" plugin_dir
+    [[ "$(basename "$file")" == "manifest.yaml" ]] || return 0
+    plugin_dir="$(ork_entity_plugin_dir "$file")"
+    rm -rf "$(ork_scope_dir "$scope" "$project")/config/$(basename "$plugin_dir")"
 }
 
 ork_entity_is_installed() {
@@ -203,7 +271,7 @@ ork_write_agents_index() {
     {
         printf "<!-- orkestra:generated scope=%s -->\n" "$scope"
         printf "# Orkestra Agents Index\n\n"
-        printf "This file is managed by Orkestra. Installed entities live under \`entities/\`.\n\n"
+        printf "This file is managed by Orkestra. Installed plugin instructions live under \`entities/\`; tools live under \`bin/\`.\n\n"
         printf "## Installed Entities\n\n"
         if find "$entities_dir" -type f -name "*.md" | grep -q .; then
             while IFS= read -r f; do
@@ -270,7 +338,7 @@ ork_write_agent_hooks() {
 
 ork_entity_enable() {
     local scope="$1" project="$2" id="$3"
-    local file dst conflict missing
+    local file dst conflict missing instruction
     file="$(ork_entity_source_path "$id")" || ork_die "Entity not found: $id"
 
     conflict="$(ork_entity_conflict "$scope" "$project" "$file" || true)"
@@ -283,15 +351,20 @@ ork_entity_enable() {
     mkdir -p "$(dirname "$dst")"
     {
         printf "<!-- orkestra:entity id=%s source=%s -->\n" "$id" "${file#$ORK_HOME/}"
-        ork_entity_yaml_block "$file" "content"
+        if instruction="$(ork_entity_instruction_path "$file" 2>/dev/null)"; then
+            cat "$instruction"
+        else
+            ork_entity_yaml_block "$file" "content"
+        fi
         if [[ "$(ork_entity_yaml_value "$file" "type")" == "shell" ]]; then
             local entrypoint
             entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
-            [[ -n "$entrypoint" ]] && printf "\nScript: \`scripts/%s\`\n" "$entrypoint"
+            [[ -n "$entrypoint" ]] && printf "\nTool: \`bin/%s\`\n" "$entrypoint"
         fi
         printf "\n"
     } > "$dst"
     ork_entity_install_script_if_needed "$scope" "$project" "$file"
+    ork_entity_install_config_if_needed "$scope" "$project" "$file"
     ork_write_agents_index "$scope" "$project"
 }
 
@@ -302,5 +375,6 @@ ork_entity_disable() {
     dst="$(ork_entity_installed_path "$scope" "$project" "$id")"
     [[ -f "$dst" ]] && rm -f "$dst"
     [[ -n "$file" ]] && ork_entity_remove_script_if_needed "$scope" "$project" "$file"
+    [[ -n "$file" ]] && ork_entity_remove_config_if_needed "$scope" "$project" "$file"
     ork_write_agents_index "$scope" "$project"
 }

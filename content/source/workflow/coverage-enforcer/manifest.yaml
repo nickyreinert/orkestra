@@ -1,0 +1,18 @@
+id: workflow.coverage-enforcer
+name: Strict Coverage Enforcer
+category: workflow.automation
+domain: enforcement
+type: shell
+executable: true
+entrypoint: check-coverage.sh
+version: 1.0.0
+author: orkestra-core
+description: >
+  Runs the repository coverage command and blocks completion when it fails.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+requires_tools: [make]
+tags: [tests, coverage, quality]

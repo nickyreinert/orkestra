@@ -42,3 +42,7 @@ entities:
   - projects.blueprints.flask-app
   - projects.blueprints.html-js
   - projects.blueprints.python-cli
+  - standards.adr-recorder
+  - workflow.auto-diff-review
+  - workflow.coverage-enforcer
+  - workflow.pr-generator

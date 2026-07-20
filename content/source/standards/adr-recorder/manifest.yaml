@@ -1,0 +1,18 @@
+id: standards.adr-recorder
+name: Micro ADR Recorder
+category: standards.design
+domain: automation
+type: shell
+executable: true
+entrypoint: log-decision.sh
+version: 1.0.0
+author: orkestra-core
+description: >
+  Records concise architectural decisions when dependencies or system boundaries change.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+requires_tools: [date]
+tags: [architecture, adr, decision-record]

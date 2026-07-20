@@ -85,9 +85,9 @@ Global flags: `-y/--yes`, `--quiet`, `--dry-run`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model.
 
-## Entity Model
+## Plugin Model
 
-Orkestra can install reusable guidance entities from `content/source/` into a
+Orkestra installs reusable plugins from `content/source/` into a
 scope-specific `AGENTS.md` index:
 
 - Source scope: shipped read-only entities under `content/source/`
@@ -96,8 +96,17 @@ scope-specific `AGENTS.md` index:
 
 Project agent files such as `AGENTS.md`, `CLAUDE.md`, and
 `.github/copilot/instructions.md` are thin hooks that import
-`.orkestra/AGENTS.md`. The actual installed entity content lives under
-`.orkestra/entities/`.
+`.orkestra/AGENTS.md`.
+
+A plugin can be a backward-compatible single YAML file or a directory with
+`manifest.yaml` and `instructions.md`. Directory plugins support three tiers:
+
+- Tier 1: instructions are compiled into `.orkestra/entities/` and imported by `AGENTS.md`.
+- Tier 2: `config.json`, `config.yaml`, or `config/` assets are copied into `.orkestra/config/`.
+- Tier 3: `bin/*.sh` tools are copied into `.orkestra/bin/` and referenced by the plugin instructions.
+
+Global scope uses `~/.config/orkestra/` on Linux, `~/Library/Application Support/orkestra/`
+on macOS, and `%APPDATA%\orkestra\` on Windows.
 
 ## WebUI Global Mode Settings
 

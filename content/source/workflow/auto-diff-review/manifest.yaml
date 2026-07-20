@@ -1,0 +1,18 @@
+id: workflow.auto-diff-review
+name: Auto Diff Review
+category: workflow.automation
+domain: automation
+type: shell
+executable: true
+entrypoint: review-diff.sh
+version: 1.0.0
+author: orkestra-core
+description: >
+  Gives coding agents a deterministic staged-diff review before a commit is proposed.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+requires_tools: [git]
+tags: [git, review, security, pre-commit]

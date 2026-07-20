@@ -1,0 +1,3 @@
+pull_request:
+  template_path: .github/pull_request_template.md
+  require_clean_worktree: true
