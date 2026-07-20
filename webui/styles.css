@@ -30,14 +30,10 @@ input {
   position: relative;
 }
 
-.tooltipTarget::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  z-index: 20;
-  width: max-content;
-  max-width: min(260px, 70vw);
+.floatingTooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: min(280px, calc(100vw - 16px));
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -45,71 +41,21 @@ input {
   background: #050505;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   font-size: 11px;
-  line-height: 1.3;
-  text-align: left;
+  line-height: 1.35;
+  pointer-events: none;
   white-space: normal;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -2px);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.tooltipTarget::before {
-  content: "";
-  position: absolute;
-  top: calc(100% + 3px);
-  left: 50%;
-  z-index: 21;
-  width: 8px;
-  height: 8px;
-  border-left: 1px solid var(--border);
-  border-top: 1px solid var(--border);
-  background: #050505;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -2px) rotate(45deg);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.tooltipTarget:hover::after,
-.tooltipTarget:focus-visible::after,
-.tooltipTarget:hover::before,
-.tooltipTarget:focus-visible::before {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.tooltipTarget.tooltipLeft::after {
-  right: 0;
-  left: auto;
-  transform: translate(0, -2px);
-}
-
-.tooltipTarget.tooltipLeft::before {
-  right: 10px;
-  left: auto;
-  transform: translate(0, -2px) rotate(45deg);
-}
-
-.tooltipTarget.tooltipLeft:hover::after,
-.tooltipTarget.tooltipLeft:focus-visible::after {
-  transform: translate(0, 0);
-}
-
-.tooltipTarget.tooltipLeft:hover::before,
-.tooltipTarget.tooltipLeft:focus-visible::before {
-  transform: translate(0, 0) rotate(45deg);
 }
 
 .topbar {
   height: 52px;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 16px;
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
   background: #101010;
+  position: relative;
 }
 
 .brand {
@@ -117,25 +63,75 @@ input {
   letter-spacing: 0;
 }
 
-.topbarPath,
 .entityId,
 .markdownPreview,
 .projectSelector input {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-.topbarPath {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .topbarActions {
   display: flex;
   gap: 8px;
+}
+
+.topbarPopover {
+  position: fixed;
+  z-index: 90;
+  width: 280px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #111;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+
+.popoverTitle {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.popoverAction {
+  width: 100%;
+  height: 32px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popoverAction:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.popoverMeta,
+.popoverHelp {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  color: #cfcfcf;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.popoverMeta {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.popoverMeta span {
+  color: var(--muted);
+}
+
+.popoverMeta strong {
+  overflow-wrap: anywhere;
+  font-weight: 500;
 }
 
 .iconButton {
@@ -167,6 +163,26 @@ input {
   background: var(--surface);
   min-height: 0;
   overflow: auto;
+  scrollbar-color: #3a3a3a transparent;
+  scrollbar-width: thin;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: #3a3a3a;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .sidebarHead {
@@ -221,12 +237,41 @@ input {
 }
 
 .categoryHeader {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
   padding: 8px;
+  border: 0;
   color: var(--muted);
+  background: transparent;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
+  text-align: left;
   text-transform: uppercase;
+  cursor: pointer;
+}
+
+.categoryHeader:hover {
+  color: var(--accent);
+}
+
+.categoryHeader strong,
+.categoryHeader em {
+  font: inherit;
+}
+
+.categoryHeader strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categoryHeader em {
+  font-style: normal;
 }
 
 .entityRow {
@@ -293,6 +338,15 @@ input {
 .miniButton:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.entityRow.installed .miniButton:first-of-type {
+  color: var(--danger);
+}
+
+.entityRow.installed .miniButton:first-of-type:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .workspace {
@@ -386,7 +440,7 @@ input {
 .entityBody {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   padding: 18px;
   overflow: auto;
@@ -431,17 +485,16 @@ input {
 
 .metaGrid {
   display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 12px;
   margin: 0;
   padding: 16px 0;
   border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
 
 .metaGrid div {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 12px;
+  gap: 6px;
 }
 
 .metaGrid dd {
@@ -450,38 +503,6 @@ input {
   color: #d4d4d4;
   font-size: 13px;
   overflow-wrap: anywhere;
-}
-
-.actionRow {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.primaryButton,
-.secondaryButton {
-  height: 34px;
-  border-radius: 6px;
-  padding: 0 12px;
-  cursor: pointer;
-}
-
-.primaryButton {
-  border: 1px solid var(--accent);
-  color: #06110f;
-  background: var(--accent);
-}
-
-.secondaryButton {
-  border: 1px solid var(--border);
-  color: var(--text);
-  background: transparent;
-}
-
-.primaryButton:disabled,
-.secondaryButton:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .previewPane {
@@ -532,12 +553,12 @@ input {
     grid-template-columns: 1fr auto;
   }
 
-  .topbarPath {
-    display: none;
-  }
-
   .shell,
   .entityBody {
+    grid-template-columns: 1fr;
+  }
+
+  .metaGrid {
     grid-template-columns: 1fr;
   }
 
