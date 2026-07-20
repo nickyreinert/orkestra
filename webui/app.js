@@ -153,7 +153,7 @@ function openPopover(kind, anchor) {
         appState.scope = appState.scope === 'global' ? 'project' : 'global';
         render();
       }],
-      ['Select first entity', () => {
+      ['Select first plugin', () => {
         if (appState.entities[0]) appState.selectedId = appState.entities[0].id;
         render();
       }],
@@ -187,9 +187,9 @@ function openPopover(kind, anchor) {
     });
   } else {
     [
-      '+ installs an available entity into the current scope.',
-      '- removes an installed entity from the current scope.',
-      'Category headers collapse or expand their entity lists.',
+      '+ installs an available plugin into the current scope.',
+      '- removes an installed plugin from the current scope.',
+      'Category and subcategory headers collapse or expand their plugin lists.',
       'Use Ctrl/Command K to focus search.',
     ].forEach((text) => {
       const item = document.createElement('div');
@@ -314,10 +314,14 @@ function renderTree() {
       chevron.textContent = collapsed ? '▸' : '▾';
       const subLabel = document.createElement('strong');
       subLabel.textContent = category.label;
+      const subId = document.createElement('span');
+      subId.className = 'subcategoryId';
+      subId.textContent = category.id;
       const count = document.createElement('em');
       count.textContent = String(category.entities.length);
       header.appendChild(chevron);
       header.appendChild(subLabel);
+      header.appendChild(subId);
       header.appendChild(count);
       header.onclick = () => {
         if (appState.collapsedCategories.has(category.id)) appState.collapsedCategories.delete(category.id);
@@ -339,7 +343,7 @@ function renderTree() {
         row.classList.toggle('active', selected && selected.id === entity.id);
         row.classList.toggle('installed', installed);
         row.classList.toggle('blocked', isBlocked(entity));
-        row.setAttribute('aria-label', `Select ${entity.id}`);
+        row.setAttribute('aria-label', `Select plugin ${entity.id}`);
         row.onclick = () => {
           appState.selectedId = entity.id;
           render();
@@ -351,16 +355,21 @@ function renderTree() {
 
         const label = document.createElement('span');
         label.className = 'entityLabel';
-        label.textContent = entity.id;
+        const name = document.createElement('strong');
+        name.textContent = entity.name || entity.id;
+        const meta = document.createElement('small');
+        meta.textContent = entity.id;
+        label.appendChild(name);
+        label.appendChild(meta);
 
         const install = document.createElement('span');
         install.className = 'miniButton tooltipTarget tooltipLeft';
         install.role = 'button';
         install.tabIndex = 0;
-        install.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id}`);
+        install.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} plugin ${entity.id}`);
         install.dataset.tooltip = installed
-          ? `Remove ${entity.id} from ${appState.scope} scope`
-          : `Install ${entity.id} into ${appState.scope} scope`;
+          ? `Remove plugin ${entity.id} from ${appState.scope} scope`
+          : `Install plugin ${entity.id} into ${appState.scope} scope`;
         install.textContent = installed ? '-' : '+';
         install.onclick = (event) => {
           event.stopPropagation();
@@ -381,7 +390,7 @@ function renderTree() {
         open.className = 'miniButton tooltipTarget tooltipLeft';
         open.role = 'button';
         open.tabIndex = 0;
-        open.setAttribute('aria-label', `Show source path for ${entity.id}`);
+        open.setAttribute('aria-label', `Show source path for plugin ${entity.id}`);
         open.dataset.tooltip = `Show source path: ${entity.path}`;
         open.textContent = '↗';
         open.onclick = (event) => {
@@ -417,9 +426,9 @@ function renderTree() {
 function renderDetails() {
   const entity = currentEntity();
   if (!entity) {
-    entityIdEl.textContent = 'Select an entity';
-    entityNameEl.textContent = 'No entity selected';
-    entityDescriptionEl.textContent = 'Choose an entity from the sidebar.';
+    entityIdEl.textContent = 'Select a plugin';
+    entityNameEl.textContent = 'No plugin selected';
+    entityDescriptionEl.textContent = 'Choose a plugin from the sidebar.';
     entityPreview.textContent = '# Preview';
     sourcePathText.textContent = '-';
     installedPathText.textContent = 'Not installed in current scope';

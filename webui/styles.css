@@ -268,6 +268,7 @@ input {
 }
 
 .subcategoryHeader {
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
   padding-left: 14px;
   font-size: 10px;
 }
@@ -284,15 +285,27 @@ input {
   white-space: nowrap;
 }
 
+.subcategoryId {
+  min-width: 0;
+  overflow: hidden;
+  color: #555;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 .categoryHeader em {
   font-style: normal;
 }
 
 .entityRow {
   width: 100%;
-  min-height: 34px;
+  min-height: 42px;
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 24px 24px;
+  grid-template-columns: 14px minmax(0, 1fr) 24px 24px;
   align-items: center;
   gap: 6px;
   border: 1px solid transparent;
@@ -346,9 +359,28 @@ input {
 .entityLabel {
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
+  display: grid;
+  gap: 2px;
+}
+
+.entityLabel strong,
+.entityLabel small {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.entityLabel strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.entityLabel small {
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
 }
 
 .miniButton {
