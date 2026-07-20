@@ -158,23 +158,45 @@ function renderTree() {
       label.textContent = entity.id;
 
       const install = document.createElement('span');
-      install.className = 'miniButton';
-      install.title = 'Install';
+      install.className = 'miniButton tooltipTarget tooltipLeft';
+      install.role = 'button';
+      install.tabIndex = 0;
+      install.setAttribute('aria-label', `Install ${entity.id}`);
+      install.dataset.tooltip = `Install ${entity.id} into selected scope`;
       install.textContent = '+';
       install.onclick = (event) => {
         event.stopPropagation();
         appState.selectedId = entity.id;
         installSelected();
       };
+      install.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        appState.selectedId = entity.id;
+        installSelected();
+      };
 
       const open = document.createElement('span');
-      open.className = 'miniButton';
-      open.title = 'View file';
+      open.className = 'miniButton tooltipTarget tooltipLeft';
+      open.role = 'button';
+      open.tabIndex = 0;
+      open.setAttribute('aria-label', `Show source path for ${entity.id}`);
+      open.dataset.tooltip = `Show source path: ${entity.path}`;
       open.textContent = '↗';
       open.onclick = (event) => {
         event.stopPropagation();
         appState.selectedId = entity.id;
         render();
+        setStatus(entity.path);
+      };
+      open.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        appState.selectedId = entity.id;
+        render();
+        setStatus(entity.path);
       };
 
       row.appendChild(dot);
@@ -217,7 +239,8 @@ function renderDetails() {
   installBtn.textContent = installed ? 'Installed' : 'Install into scope';
   disableBtn.disabled = !installed;
   viewFileBtn.disabled = false;
-  viewFileBtn.title = entity.path;
+  viewFileBtn.setAttribute('aria-label', `Show source path for ${entity.id}`);
+  viewFileBtn.dataset.tooltip = `Show source path: ${entity.path}`;
 }
 
 function render() {
