@@ -1,0 +1,24 @@
+id: agent.tooling.claude-code-settings
+name: Claude Code Settings
+category: agent.tooling
+domain: guidance
+type: json
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Claude Code settings.json conventions for permissions, environment, and hooks.
+compatibility:
+  agents: [claude]
+  scopes: [project]
+conflicts_with: []
+requires: [projects.blueprints.claude-code-project]
+tags: [claude-code, settings, permissions]
+content: |
+  # Claude Code Settings
+
+  - Keep project settings in `.claude/settings.json`.
+  - Allow routine read/edit and local Git inspection commands.
+  - Deny risky commands such as direct pushes, hard resets, and recursive deletion unless explicitly intended.
+  - Keep environment defaults non-sensitive.
+  - Use hooks for lightweight reminders such as running formatters or tests after edits.

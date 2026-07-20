@@ -63,11 +63,11 @@ ork_entity_source_path() {
     esac
 
     local direct="$ORK_SOURCE_DIR/$plural/$name.yaml"
-    local nested="$ORK_SOURCE_DIR/${id//./\/}.yaml"
-    if [[ -f "$direct" ]]; then
-        printf "%s\n" "$direct"
-    elif [[ -f "$nested" ]]; then
+    local nested="$ORK_SOURCE_DIR/$(printf "%s" "$id" | tr "." "/").yaml"
+    if [[ -f "$nested" ]]; then
         printf "%s\n" "$nested"
+    elif [[ -f "$direct" ]]; then
+        printf "%s\n" "$direct"
     else
         return 1
     fi
@@ -111,11 +111,54 @@ ork_entity_yaml_block() {
 
 ork_list_entities() {
     [[ -d "$ORK_SOURCE_DIR" ]] || return 0
-    find "$ORK_SOURCE_DIR" -mindepth 2 -maxdepth 2 -type f \( -name "*.yaml" -o -name "*.yml" \) | sort | while IFS= read -r f; do
+    find "$ORK_SOURCE_DIR" -mindepth 2 -type f \( -name "*.yaml" -o -name "*.yml" \) ! -name "manifest.yaml" | sort | while IFS= read -r f; do
         local id
         id="$(ork_entity_yaml_value "$f" "id")"
         [[ -n "$id" ]] && printf "%s\n" "$id"
     done
+}
+
+ork_entity_script_source_path() {
+    local file="$1" entrypoint="$2"
+    local local_script
+    local_script="$(dirname "$file")/$entrypoint"
+    if [[ -f "$local_script" ]]; then
+        printf "%s\n" "$local_script"
+        return 0
+    fi
+    if [[ -f "$ORK_HOME/content/hooks/common/$entrypoint" ]]; then
+        printf "%s\n" "$ORK_HOME/content/hooks/common/$entrypoint"
+        return 0
+    fi
+    return 1
+}
+
+ork_entity_install_script_if_needed() {
+    local scope="$1" project="$2" file="$3"
+    local typ executable entrypoint script_src scripts_dir script_dst
+    typ="$(ork_entity_yaml_value "$file" "type")"
+    executable="$(ork_entity_yaml_value "$file" "executable")"
+    entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
+
+    [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
+    script_src="$(ork_entity_script_source_path "$file" "$entrypoint")" || ork_die "Script entrypoint not found: $entrypoint"
+    scripts_dir="$(ork_scope_dir "$scope" "$project")/scripts"
+    script_dst="$scripts_dir/$entrypoint"
+    mkdir -p "$scripts_dir"
+    cp "$script_src" "$script_dst"
+    chmod +x "$script_dst"
+}
+
+ork_entity_remove_script_if_needed() {
+    local scope="$1" project="$2" file="$3"
+    local typ executable entrypoint script_dst
+    typ="$(ork_entity_yaml_value "$file" "type")"
+    executable="$(ork_entity_yaml_value "$file" "executable")"
+    entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
+
+    [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
+    script_dst="$(ork_scope_dir "$scope" "$project")/scripts/$entrypoint"
+    [[ -f "$script_dst" ]] && rm -f "$script_dst"
 }
 
 ork_entity_is_installed() {
@@ -241,15 +284,23 @@ ork_entity_enable() {
     {
         printf "<!-- orkestra:entity id=%s source=%s -->\n" "$id" "${file#$ORK_HOME/}"
         ork_entity_yaml_block "$file" "content"
+        if [[ "$(ork_entity_yaml_value "$file" "type")" == "shell" ]]; then
+            local entrypoint
+            entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
+            [[ -n "$entrypoint" ]] && printf "\nScript: \`scripts/%s\`\n" "$entrypoint"
+        fi
         printf "\n"
     } > "$dst"
+    ork_entity_install_script_if_needed "$scope" "$project" "$file"
     ork_write_agents_index "$scope" "$project"
 }
 
 ork_entity_disable() {
     local scope="$1" project="$2" id="$3"
-    local dst
+    local dst file
+    file="$(ork_entity_source_path "$id" 2>/dev/null || true)"
     dst="$(ork_entity_installed_path "$scope" "$project" "$id")"
     [[ -f "$dst" ]] && rm -f "$dst"
+    [[ -n "$file" ]] && ork_entity_remove_script_if_needed "$scope" "$project" "$file"
     ork_write_agents_index "$scope" "$project"
 }

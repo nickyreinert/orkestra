@@ -1,0 +1,24 @@
+id: coding.standards.clean-code
+name: Clean Code Essentials
+category: coding.standards
+domain: guidance
+type: markdown
+executable: false
+version: 1.3.0
+author: orkestra-core
+description: >
+  Encourages small functions, readable names, and comments that explain intent.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: [coding.standards.lax]
+requires: []
+tags: [clean, readability, maintainability]
+content: |
+  # Clean Code Essentials
+
+  - Functions do one thing.
+  - Names reveal intent.
+  - Keep comments for why, not what.
+  - Prefer explicit control flow over clever compression.
+  - Keep refactors scoped to the behavior being changed.

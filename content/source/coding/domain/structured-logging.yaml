@@ -1,0 +1,24 @@
+id: coding.domain.structured-logging
+name: Structured Execution Logging
+category: coding.domain
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Logging rules from the Flask/Python template.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [logging, python, debug]
+content: |
+  # Structured Execution Logging
+
+  - Read debug level from `.env` when the project supports it.
+  - Log app start and end.
+  - Log function entry and exit with important parameters.
+  - Log branch and loop boundaries at debug level.
+  - Log exception errors with enough context to locate the issue.

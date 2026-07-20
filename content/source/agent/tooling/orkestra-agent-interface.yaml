@@ -1,0 +1,25 @@
+id: agent.tooling.orkestra-agent-interface
+name: Orkestra Agent Interface
+category: agent.tooling
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Teaches coding agents how to work through Orkestra sources, renders, and diffs.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [orkestra, render, source-of-truth]
+content: |
+  # Orkestra Agent Interface
+
+  - Prefer Orkestra MCP tools when available.
+  - Editable guidance sources live under Orkestra source folders.
+  - Rendered files are observability artifacts and should not be hand-edited.
+  - Read current status before changing guidance.
+  - Update source files, re-render the project, and show source-vs-rendered diffs.
+  - Do not skip render after changing source instructions.

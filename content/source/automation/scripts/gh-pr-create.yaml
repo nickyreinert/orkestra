@@ -1,0 +1,30 @@
+id: automation.scripts.gh-pr-create
+name: Create And Label Pull Request
+category: automation.scripts
+domain: automation
+type: shell
+executable: true
+runtime: bash
+entrypoint: gh-pr-create.sh
+version: 0.1.0
+author: orkestra-core
+description: >
+  Creates a GitHub pull request with gh CLI and applies a review label.
+description_short: >
+  gh pr create plus review label.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+  os: [linux, macos]
+requires_tools: [gh, git]
+conflicts_with: []
+requires: [enforcement.policies.safety-scope]
+tags: [github, pull-request, automation, cli]
+content: |
+  # Create And Label Pull Request
+
+  - Requires `gh` and `git`.
+  - Creates a pull request from the current branch.
+  - Uses `--fill` so the PR title and body come from commits.
+  - Adds a `needs-review` label when available.
+  - Intended for project scope only.

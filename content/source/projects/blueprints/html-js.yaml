@@ -1,0 +1,25 @@
+id: projects.blueprints.html-js
+name: HTML And Vanilla JS
+category: projects.blueprints
+domain: guidance
+type: yaml
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Project topology for static HTML, CSS, and vanilla JavaScript.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: [coding.domain.frontend-accessibility, coding.domain.frontend-vanilla-modules, coding.domain.css-mobile-first]
+tags: [html, css, javascript]
+content: |
+  # HTML And Vanilla JS
+
+  - Use semantic HTML for page structure.
+  - Keep CSS variable-driven and responsive.
+  - Use vanilla ES6+ JavaScript organized by feature.
+  - Prefer small, explicit event handlers.
+  - Verify UI states manually after changes.
+  - Run configured external review agents when available.

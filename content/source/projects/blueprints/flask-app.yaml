@@ -1,0 +1,25 @@
+id: projects.blueprints.flask-app
+name: Flask Application
+category: projects.blueprints
+domain: guidance
+type: yaml
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Backend, API, validation, security, and test guidance for Flask-style apps.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: [coding.architecture.api-response-envelope, enforcement.policies.security-baseline]
+tags: [python, flask, web]
+content: |
+  # Flask Application
+
+  - Validate all inputs at API and form boundaries.
+  - Trace data from UI to API to storage and back.
+  - Use parameterized queries and avoid raw SQL.
+  - Add rate limiting and CSRF protection where relevant.
+  - Sanitize filenames on upload.
+  - Test public functions and important integration paths.

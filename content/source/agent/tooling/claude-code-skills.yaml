@@ -1,0 +1,25 @@
+id: agent.tooling.claude-code-skills
+name: Claude Code Skills
+category: agent.tooling
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  How to structure Claude Code skills for reusable slash-command expertise.
+compatibility:
+  agents: [claude]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [claude-code, skills, slash-commands]
+content: |
+  # Claude Code Skills
+
+  - Store skills under `.claude/skills/<skill-name>/SKILL.md`.
+  - Use a folder per skill.
+  - Keep `SKILL.md` frontmatter plus instructions.
+  - Use skills for repeatable, well-defined tasks.
+  - Inline shell commands with `!` when appropriate.
+  - Check into Git when the knowledge is institutional.

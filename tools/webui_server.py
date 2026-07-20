@@ -51,7 +51,26 @@ def watch_signature(paths: list[Path]) -> str:
 
 
 SERVER_SIGNATURE = watch_signature(SERVER_WATCH_FILES)
-ENTITY_CATEGORY_ORDER = ["style", "topology", "skill", "workflow", "hook", "agent-style", "general"]
+ENTITY_CATEGORY_TREE = [
+    ("agent", "AGENT", [("agent.profiles", "profiles"), ("agent.tooling", "tooling")]),
+    (
+        "coding",
+        "CODING",
+        [
+            ("coding.standards", "standards"),
+            ("coding.architecture", "architecture"),
+            ("coding.domain", "domain"),
+        ],
+    ),
+    ("projects", "PROJECTS", [("projects.blueprints", "blueprints")]),
+    ("enforcement", "ENFORCEMENT", [("enforcement.policies", "policies"), ("enforcement.hooks", "hooks")]),
+    ("automation", "AUTOMATION", [("automation.scripts", "scripts"), ("automation.workflows", "workflows")]),
+]
+DOMAIN_META = {
+    "guidance": {"label": "Guidance", "indicator": "◇"},
+    "enforcement": {"label": "Enforcement", "indicator": "◈"},
+    "automation": {"label": "Automation", "indicator": "▶"},
+}
 
 
 def maybe_restart_on_server_change() -> None:
@@ -172,12 +191,19 @@ def collect_extras() -> list[dict]:
 
 def normalize_entity_category(category: str) -> str:
     aliases = {
-        "styles": "style",
-        "topologies": "topology",
-        "skills": "skill",
-        "workflows": "workflow",
-        "hooks": "hook",
-        "agent-styles": "agent-style",
+        "style": "coding.standards",
+        "styles": "coding.standards",
+        "topology": "projects.blueprints",
+        "topologies": "projects.blueprints",
+        "skill": "coding.domain",
+        "skills": "coding.domain",
+        "workflow": "automation.workflows",
+        "workflows": "automation.workflows",
+        "hook": "enforcement.hooks",
+        "hooks": "enforcement.hooks",
+        "agent-style": "agent.profiles",
+        "agent-styles": "agent.profiles",
+        "general": "enforcement.policies",
     }
     return aliases.get(category, category)
 
@@ -264,11 +290,21 @@ def parse_entity_file(path: Path) -> dict | None:
         "id": entity_id,
         "name": str(data.get("name") or entity_id),
         "category": category,
+        "categoryMain": category.split(".", 1)[0] if "." in category else category,
+        "categorySub": category.split(".", 1)[1] if "." in category else "",
+        "domain": str(data.get("domain") or "guidance"),
+        "type": str(data.get("type") or "markdown"),
+        "executable": bool(data.get("executable") is True or str(data.get("executable")).lower() == "true"),
+        "runtime": str(data.get("runtime") or ""),
+        "entrypoint": str(data.get("entrypoint") or ""),
         "version": str(data.get("version") or ""),
         "author": str(data.get("author") or ""),
         "description": str(data.get("description") or "").strip(),
+        "descriptionShort": str(data.get("description_short") or data.get("description") or "").strip(),
         "agents": list_value(compatibility.get("agents")),
         "scopes": list_value(compatibility.get("scopes")),
+        "os": list_value(compatibility.get("os")),
+        "requiresTools": list_value(data.get("requires_tools")),
         "conflictsWith": list_value(data.get("conflicts_with")),
         "requires": list_value(data.get("requires")),
         "tags": list_value(data.get("tags")),
@@ -313,20 +349,50 @@ def collect_entities_index() -> dict:
             entities.append(entity)
 
     categories: dict[str, list[dict]] = {}
+    domain_counts = {domain: 0 for domain in DOMAIN_META}
     for entity in entities:
         categories.setdefault(entity["category"], []).append(entity)
+        domain_counts.setdefault(entity["domain"], 0)
+        domain_counts[entity["domain"]] += 1
+
+    category_tree = []
+    known_subcategories = set()
+    for main_id, main_label, subcategories in ENTITY_CATEGORY_TREE:
+        sub_out = []
+        for sub_id, sub_label in subcategories:
+            known_subcategories.add(sub_id)
+            sub_out.append({"id": sub_id, "label": sub_label, "entities": categories.get(sub_id, [])})
+        category_tree.append({"id": main_id, "label": main_label, "subcategories": sub_out})
+
+    for cat in sorted(set(categories) - known_subcategories):
+        main = cat.split(".", 1)[0]
+        label = cat.split(".", 1)[1] if "." in cat else cat
+        target = next((item for item in category_tree if item["id"] == main), None)
+        if target is None:
+            target = {"id": main, "label": main.upper(), "subcategories": []}
+            category_tree.append(target)
+        target["subcategories"].append({"id": cat, "label": label, "entities": categories[cat]})
 
     ordered_categories = [
-        {"id": cat, "label": cat.replace("-", " ").title(), "entities": categories[cat]}
-        for cat in ENTITY_CATEGORY_ORDER
-        if cat in categories
+        {"id": sub["id"], "label": sub["label"], "entities": sub["entities"]}
+        for main in category_tree
+        for sub in main["subcategories"]
+        if sub["entities"]
     ]
-    for cat in sorted(set(categories) - set(ENTITY_CATEGORY_ORDER)):
-        ordered_categories.append({"id": cat, "label": cat.replace("-", " ").title(), "entities": categories[cat]})
 
     return {
         "entities": entities,
         "categories": ordered_categories,
+        "categoryTree": category_tree,
+        "domains": [
+            {
+                "id": domain,
+                "label": meta["label"],
+                "indicator": meta["indicator"],
+                "count": domain_counts.get(domain, 0),
+            }
+            for domain, meta in DOMAIN_META.items()
+        ],
         "agents": list_agents(),
         "project": {
             "path": str(PROJECT_DIR),

@@ -232,8 +232,13 @@ input {
   padding: 10px 8px 18px;
 }
 
-.category {
+.category,
+.subcategory {
   margin-bottom: 8px;
+}
+
+.subcategory {
+  margin-left: 8px;
 }
 
 .categoryHeader {
@@ -256,6 +261,15 @@ input {
 
 .categoryHeader:hover {
   color: var(--accent);
+}
+
+.mainCategoryHeader {
+  color: var(--text);
+}
+
+.subcategoryHeader {
+  padding-left: 14px;
+  font-size: 10px;
 }
 
 .categoryHeader strong,
@@ -288,6 +302,20 @@ input {
   background: transparent;
   text-align: left;
   cursor: pointer;
+}
+
+.domainIndicator {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.entityRow.enforcement .domainIndicator {
+  color: #fbbf24;
+}
+
+.entityRow.automation .domainIndicator {
+  color: var(--accent);
 }
 
 .entityRow:hover,
@@ -363,14 +391,16 @@ input {
 }
 
 .scopeRow,
-.agentRow {
+.agentRow,
+.domainRow {
   display: flex;
   align-items: center;
   gap: 18px;
   padding: 14px 18px;
 }
 
-.scopeRow {
+.scopeRow,
+.agentRow {
   border-bottom: 1px solid var(--border);
 }
 
@@ -385,7 +415,8 @@ input {
 }
 
 .segmented,
-.agentMatrix {
+.agentMatrix,
+.domainFilters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -393,7 +424,8 @@ input {
 }
 
 .segment,
-.agentCheck {
+.agentCheck,
+.domainChip {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--muted);
@@ -435,6 +467,31 @@ input {
 
 .agentCheck input {
   accent-color: var(--accent);
+}
+
+.domainChip {
+  min-height: 30px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.domainChip.active {
+  color: var(--text);
+  background: #181818;
+}
+
+.domainChip.guidance.active {
+  border-color: var(--muted);
+}
+
+.domainChip.enforcement.active {
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+.domainChip.automation.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .entityBody {
@@ -485,7 +542,7 @@ input {
 
 .metaGrid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
   margin: 0;
   padding: 16px 0;

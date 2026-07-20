@@ -1,0 +1,24 @@
+id: coding.architecture.performance-hot-path
+name: Hot Path Performance
+category: coding.architecture
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Performance style rules for parser/tokenizer-like code.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [performance, tokenizer, parser]
+content: |
+  # Hot Path Performance
+
+  - Minimize allocations in hot paths.
+  - Avoid unnecessary string slicing.
+  - Prefer `str.find()` for scanning when regular expressions are not needed.
+  - Reuse buffers where it is safe.
+  - Infer state from data structures rather than duplicating flags.

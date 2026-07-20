@@ -1,0 +1,25 @@
+id: enforcement.policies.orkestra-meta
+name: Orkestra Generated File Contract
+category: enforcement.policies
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Explains the source-vs-rendered contract in Orkestra-managed projects.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [orkestra, generated-files, manifest]
+content: |
+  # Orkestra Generated File Contract
+
+  - Rendered targets carry an `orkestra:generated` marker.
+  - Edit sources, not generated target files.
+  - Run `orkestra render` after source changes.
+  - Use `.orkestra/manifest.yaml` to detect active sources and drift.
+  - Never delete `.orkestra/manifest.yaml`; it is the project contract.
+  - When source vs. generated ownership is unclear, ask before editing.

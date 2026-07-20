@@ -2,6 +2,7 @@ const projectInput = document.getElementById('projectInput');
 const entitySearch = document.getElementById('entitySearch');
 const entityTree = document.getElementById('entityTree');
 const agentMatrix = document.getElementById('agentMatrix');
+const domainFilters = document.getElementById('domainFilters');
 const sourcePathText = document.getElementById('sourcePathText');
 const installedPathText = document.getElementById('installedPathText');
 const commandBtn = document.getElementById('commandBtn');
@@ -16,6 +17,8 @@ const entityDescriptionEl = document.getElementById('entityDescription');
 const entityVersionEl = document.getElementById('entityVersion');
 const entityAuthorEl = document.getElementById('entityAuthor');
 const entityAgentsEl = document.getElementById('entityAgents');
+const entityDomainEl = document.getElementById('entityDomain');
+const entityTypeEl = document.getElementById('entityType');
 const entityConflictsEl = document.getElementById('entityConflicts');
 const entityTagsEl = document.getElementById('entityTags');
 const entityPreview = document.getElementById('entityPreview');
@@ -24,6 +27,9 @@ let appState = {
   scope: 'global',
   entities: [],
   categories: [],
+  categoryTree: [],
+  domains: [],
+  activeDomains: new Set(['guidance', 'enforcement', 'automation']),
   agents: [],
   selectedAgents: new Set(),
   collapsedCategories: new Set(),
@@ -83,9 +89,24 @@ function matchesQuery(entity) {
   return haystack.includes(query);
 }
 
+function matchesDomain(entity) {
+  return appState.activeDomains.has(entity.domain || 'guidance');
+}
+
 function formatList(values) {
   if (!Array.isArray(values) || values.length === 0) return '-';
   return values.join(', ');
+}
+
+function domainIndicator(domain) {
+  if (domain === 'enforcement') return '◈';
+  if (domain === 'automation') return '▶';
+  return '◇';
+}
+
+function domainLabel(entity) {
+  const domain = entity?.domain || 'guidance';
+  return `${domainIndicator(domain)} ${domain}`;
 }
 
 function selectedAgentList() {
@@ -215,123 +236,183 @@ function renderAgents() {
   });
 }
 
+function renderDomainFilters() {
+  domainFilters.innerHTML = '';
+  appState.domains.forEach((domain) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `domainChip ${domain.id}`;
+    button.classList.toggle('active', appState.activeDomains.has(domain.id));
+    button.setAttribute('aria-pressed', appState.activeDomains.has(domain.id) ? 'true' : 'false');
+    button.textContent = `${domain.indicator} ${domain.label}: ${domain.count}`;
+    button.onclick = () => {
+      if (appState.activeDomains.has(domain.id)) appState.activeDomains.delete(domain.id);
+      else appState.activeDomains.add(domain.id);
+      if (appState.activeDomains.size === 0) appState.activeDomains.add(domain.id);
+      render();
+    };
+    domainFilters.appendChild(button);
+  });
+}
+
 function renderTree() {
   entityTree.innerHTML = '';
   const selected = currentEntity();
-  const groups = appState.categories
-    .map((category) => ({
-      ...category,
-      entities: category.entities.filter(matchesQuery),
+  const tree = appState.categoryTree
+    .map((main) => ({
+      ...main,
+      subcategories: main.subcategories
+        .map((sub) => ({
+          ...sub,
+          entities: sub.entities.filter((entity) => matchesQuery(entity) && matchesDomain(entity)),
+        }))
+        .filter((sub) => sub.entities.length > 0),
     }))
-    .filter((category) => category.entities.length > 0);
+    .filter((main) => main.subcategories.length > 0);
 
-  groups.forEach((category) => {
-    const section = document.createElement('section');
-    section.className = 'category';
+  tree.forEach((main) => {
+    const mainSection = document.createElement('section');
+    mainSection.className = 'category mainCategory';
 
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'categoryHeader';
-    const collapsed = appState.collapsedCategories.has(category.id) && !appState.query.trim();
-    header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    const chevron = document.createElement('span');
-    chevron.textContent = collapsed ? '▸' : '▾';
-    const label = document.createElement('strong');
-    label.textContent = category.label;
-    const count = document.createElement('em');
-    count.textContent = String(category.entities.length);
-    header.appendChild(chevron);
-    header.appendChild(label);
-    header.appendChild(count);
-    header.onclick = () => {
-      if (appState.collapsedCategories.has(category.id)) appState.collapsedCategories.delete(category.id);
-      else appState.collapsedCategories.add(category.id);
+    const mainHeader = document.createElement('button');
+    mainHeader.type = 'button';
+    mainHeader.className = 'categoryHeader mainCategoryHeader';
+    const mainCollapsed = appState.collapsedCategories.has(main.id) && !appState.query.trim();
+    const total = main.subcategories.reduce((count, sub) => count + sub.entities.length, 0);
+    mainHeader.setAttribute('aria-expanded', mainCollapsed ? 'false' : 'true');
+    const mainChevron = document.createElement('span');
+    mainChevron.textContent = mainCollapsed ? '▸' : '▾';
+    const mainLabel = document.createElement('strong');
+    mainLabel.textContent = main.label;
+    const mainCount = document.createElement('em');
+    mainCount.textContent = String(total);
+    mainHeader.appendChild(mainChevron);
+    mainHeader.appendChild(mainLabel);
+    mainHeader.appendChild(mainCount);
+    mainHeader.onclick = () => {
+      if (appState.collapsedCategories.has(main.id)) appState.collapsedCategories.delete(main.id);
+      else appState.collapsedCategories.add(main.id);
       renderTree();
     };
-    section.appendChild(header);
+    mainSection.appendChild(mainHeader);
 
-    if (collapsed) {
-      entityTree.appendChild(section);
+    if (mainCollapsed) {
+      entityTree.appendChild(mainSection);
       return;
     }
 
-    category.entities.forEach((entity) => {
-      const installed = isInstalled(entity);
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'entityRow';
-      row.classList.toggle('active', selected && selected.id === entity.id);
-      row.classList.toggle('installed', installed);
-      row.classList.toggle('blocked', isBlocked(entity));
-      row.setAttribute('aria-label', `Select ${entity.id}`);
-      row.onclick = () => {
-        appState.selectedId = entity.id;
-        render();
-      };
+    main.subcategories.forEach((category) => {
+      const section = document.createElement('section');
+      section.className = 'subcategory';
 
-      const dot = document.createElement('span');
-      dot.className = 'stateDot';
-
-      const label = document.createElement('span');
-      label.className = 'entityLabel';
-      label.textContent = entity.id;
-
-      const install = document.createElement('span');
-      install.className = 'miniButton tooltipTarget tooltipLeft';
-      install.role = 'button';
-      install.tabIndex = 0;
-      install.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id}`);
-      install.dataset.tooltip = installed
-        ? `Remove ${entity.id} from ${appState.scope} scope`
-        : `Install ${entity.id} into ${appState.scope} scope`;
-      install.textContent = installed ? '-' : '+';
-      install.onclick = (event) => {
-        event.stopPropagation();
-        appState.selectedId = entity.id;
-        if (installed) disableSelected();
-        else installSelected();
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'categoryHeader subcategoryHeader';
+      const collapsed = appState.collapsedCategories.has(category.id) && !appState.query.trim();
+      header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      const chevron = document.createElement('span');
+      chevron.textContent = collapsed ? '▸' : '▾';
+      const subLabel = document.createElement('strong');
+      subLabel.textContent = category.label;
+      const count = document.createElement('em');
+      count.textContent = String(category.entities.length);
+      header.appendChild(chevron);
+      header.appendChild(subLabel);
+      header.appendChild(count);
+      header.onclick = () => {
+        if (appState.collapsedCategories.has(category.id)) appState.collapsedCategories.delete(category.id);
+        else appState.collapsedCategories.add(category.id);
+        renderTree();
       };
-      install.onkeydown = (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        appState.selectedId = entity.id;
-        if (installed) disableSelected();
-        else installSelected();
-      };
+      section.appendChild(header);
 
-      const open = document.createElement('span');
-      open.className = 'miniButton tooltipTarget tooltipLeft';
-      open.role = 'button';
-      open.tabIndex = 0;
-      open.setAttribute('aria-label', `Show source path for ${entity.id}`);
-      open.dataset.tooltip = `Show source path: ${entity.path}`;
-      open.textContent = '↗';
-      open.onclick = (event) => {
-        event.stopPropagation();
-        appState.selectedId = entity.id;
-        render();
-        setStatus(entity.path);
-      };
-      open.onkeydown = (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        appState.selectedId = entity.id;
-        render();
-        setStatus(entity.path);
-      };
+      if (collapsed) {
+        mainSection.appendChild(section);
+        return;
+      }
 
-      row.appendChild(dot);
-      row.appendChild(label);
-      row.appendChild(install);
-      row.appendChild(open);
-      section.appendChild(row);
+      category.entities.forEach((entity) => {
+        const installed = isInstalled(entity);
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = `entityRow ${entity.domain || 'guidance'}`;
+        row.classList.toggle('active', selected && selected.id === entity.id);
+        row.classList.toggle('installed', installed);
+        row.classList.toggle('blocked', isBlocked(entity));
+        row.setAttribute('aria-label', `Select ${entity.id}`);
+        row.onclick = () => {
+          appState.selectedId = entity.id;
+          render();
+        };
+
+        const indicator = document.createElement('span');
+        indicator.className = 'domainIndicator';
+        indicator.textContent = domainIndicator(entity.domain);
+
+        const label = document.createElement('span');
+        label.className = 'entityLabel';
+        label.textContent = entity.id;
+
+        const install = document.createElement('span');
+        install.className = 'miniButton tooltipTarget tooltipLeft';
+        install.role = 'button';
+        install.tabIndex = 0;
+        install.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id}`);
+        install.dataset.tooltip = installed
+          ? `Remove ${entity.id} from ${appState.scope} scope`
+          : `Install ${entity.id} into ${appState.scope} scope`;
+        install.textContent = installed ? '-' : '+';
+        install.onclick = (event) => {
+          event.stopPropagation();
+          appState.selectedId = entity.id;
+          if (installed) disableSelected();
+          else installSelected();
+        };
+        install.onkeydown = (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          event.stopPropagation();
+          appState.selectedId = entity.id;
+          if (installed) disableSelected();
+          else installSelected();
+        };
+
+        const open = document.createElement('span');
+        open.className = 'miniButton tooltipTarget tooltipLeft';
+        open.role = 'button';
+        open.tabIndex = 0;
+        open.setAttribute('aria-label', `Show source path for ${entity.id}`);
+        open.dataset.tooltip = `Show source path: ${entity.path}`;
+        open.textContent = '↗';
+        open.onclick = (event) => {
+          event.stopPropagation();
+          appState.selectedId = entity.id;
+          render();
+          setStatus(entity.path);
+        };
+        open.onkeydown = (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          event.stopPropagation();
+          appState.selectedId = entity.id;
+          render();
+          setStatus(entity.path);
+        };
+
+        row.appendChild(indicator);
+        row.appendChild(label);
+        row.appendChild(install);
+        row.appendChild(open);
+        section.appendChild(row);
+      });
+
+      mainSection.appendChild(section);
     });
 
-    entityTree.appendChild(section);
+    entityTree.appendChild(mainSection);
   });
 }
+
 
 function renderDetails() {
   const entity = currentEntity();
@@ -353,6 +434,10 @@ function renderDetails() {
   entityVersionEl.textContent = entity.version || '-';
   entityAuthorEl.textContent = entity.author || '-';
   entityAgentsEl.textContent = formatList(entity.agents);
+  entityDomainEl.textContent = domainLabel(entity);
+  entityTypeEl.textContent = entity.entrypoint
+    ? `${entity.type} · ${entity.runtime || '-'} · ${entity.entrypoint}`
+    : entity.type || '-';
   entityConflictsEl.textContent = formatList(entity.conflictsWith);
   entityTagsEl.textContent = formatList(entity.tags);
   entityPreview.textContent = entity.content || '# Empty entity';
@@ -366,6 +451,7 @@ function renderDetails() {
 function render() {
   renderScopeControls();
   renderAgents();
+  renderDomainFilters();
   renderTree();
   renderDetails();
 }
@@ -374,6 +460,8 @@ async function refresh() {
   const data = await apiGet('/api/entities');
   appState.entities = data.entities || [];
   appState.categories = data.categories || [];
+  appState.categoryTree = data.categoryTree || [];
+  appState.domains = data.domains || [];
   appState.agents = data.agents || [];
   if (appState.agents.length === 0) appState.agents = ['codex'];
   appState.agents.forEach((agent) => appState.selectedAgents.add(agent));

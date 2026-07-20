@@ -1,0 +1,23 @@
+id: coding.architecture.api-response-envelope
+name: API Response Envelope
+category: coding.architecture
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Standard API response shape from the web app templates.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [api, response, backend]
+content: |
+  # API Response Envelope
+
+  - Return API responses as `{"status": "success|error", "data": {}, "message": ""}`.
+  - Keep error messages clear and user-facing.
+  - Do not expose raw stack traces in normal responses.
+  - Validate input at API boundaries.

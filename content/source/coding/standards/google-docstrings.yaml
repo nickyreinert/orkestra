@@ -1,0 +1,23 @@
+id: coding.standards.google-docstrings
+name: Google Style Docstrings
+category: coding.standards
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Documentation style from the Python template rules.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [python, docs, docstrings]
+content: |
+  # Google Style Docstrings
+
+  - Use Google-style docstrings where the project expects docstrings.
+  - Document purpose, inputs, outputs, process, and important dependencies.
+  - Keep docs in plain English.
+  - Use brief bullet points for dense operational guidance.

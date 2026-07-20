@@ -1,0 +1,25 @@
+id: enforcement.hooks.validate-commit-msg
+name: Validate Commit Message
+category: enforcement.hooks
+domain: enforcement
+type: shell
+executable: true
+runtime: bash
+entrypoint: validate-commit-msg.sh
+version: 0.1.0
+author: orkestra-core
+description: >
+  Commit message hook for keeping history readable.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [git, commit-msg, workflow]
+content: |
+  # Validate Commit Message Hook
+
+  - Event: `commit-msg`.
+  - Reject empty or malformed commit messages.
+  - Prefer concise imperative messages.
+  - Keep history useful for humans and automation.

@@ -1,0 +1,24 @@
+id: projects.blueprints.python-cli
+name: Python CLI Application
+category: projects.blueprints
+domain: guidance
+type: yaml
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Planning, implementation, and verification guidance for Python CLI projects.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: [coding.standards.python-naming, coding.standards.python-type-hints]
+tags: [python, cli, topology]
+content: |
+  # Python CLI Application
+
+  - Define command-line commands, subcommands, arguments, and examples before implementation.
+  - Separate CLI parsing from core logic.
+  - Keep a minimal entry point that handles `KeyboardInterrupt` cleanly.
+  - Add `requirements.txt` and Python `.gitignore` entries.
+  - Verify with `--help` and at least one happy-path command.

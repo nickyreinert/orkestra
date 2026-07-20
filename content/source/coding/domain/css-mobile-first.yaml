@@ -1,0 +1,23 @@
+id: coding.domain.css-mobile-first
+name: Mobile First CSS
+category: coding.domain
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  CSS structure conventions from the HTML/JS template.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [css, frontend, responsive]
+content: |
+  # Mobile First CSS
+
+  - Start layouts from the smallest viewport.
+  - Use CSS variables for colors and fonts.
+  - Keep naming consistent with the project's convention.
+  - Verify that text and controls fit on mobile and desktop.

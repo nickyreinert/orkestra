@@ -1,0 +1,23 @@
+id: coding.standards.python-type-hints
+name: Python Type Hints
+category: coding.standards
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Requires typed Python interfaces and static type verification.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [python, typing, mypy]
+content: |
+  # Python Type Hints
+
+  - Add type hints to public functions and important internal boundaries.
+  - Keep data shapes explicit instead of probing dynamically.
+  - Run `mypy src/` when the project is configured for it.
+  - Prefer typed return values over implicit `None` paths.

@@ -1,0 +1,26 @@
+id: enforcement.policies.safety-scope
+name: Safety And Scope
+category: enforcement.policies
+domain: enforcement
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Universal rules for scoped implementation, secrets, destructive actions, and assumption checks.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [safety, scope, secrets]
+content: |
+  # Safety And Scope
+
+  - Implement only what was requested.
+  - Avoid speculative features and unrelated refactors.
+  - Do not hardcode secrets or commit credentials.
+  - Put sensitive config in `.env`.
+  - Require explicit user consent for destructive or hard-to-reverse actions.
+  - Validate assumptions by checking the codebase or asking.
+  - Re-read project anchor files at the start of substantial tasks.

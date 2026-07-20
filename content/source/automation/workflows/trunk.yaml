@@ -1,0 +1,23 @@
+id: automation.workflows.trunk
+name: Trunk Based Delivery
+category: automation.workflows
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Keeps changes small, reviewable, and continuously integrated.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: [automation.workflows.gitflow]
+requires: []
+tags: [git, ci, delivery]
+content: |
+  # Trunk Based Delivery
+
+  - Keep branches short-lived.
+  - Prefer small pull requests with clear verification notes.
+  - Rebase or merge main before final validation when the branch is stale.
+  - Keep CI green before handing work off.

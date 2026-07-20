@@ -1,0 +1,24 @@
+id: agent.profiles.claude-code-team-guardrails
+name: Claude Code Team Guardrails
+category: agent.profiles
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Recommended CLAUDE.md team guidance sections and boundaries.
+compatibility:
+  agents: [claude]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [claude-code, claude-md, guardrails]
+content: |
+  # Claude Code Team Guardrails
+
+  - Keep `CLAUDE.md` concise and committed to the repo.
+  - Use it for team guardrails that should load at every session start.
+  - Keep short focus rules and avoid verbose prose.
+  - Include development workflow, build/test/run commands, code style conventions, architecture overview, and recurring mistakes.
+  - Let Claude append rules for itself after errors when that convention is useful.

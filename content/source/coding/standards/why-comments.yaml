@@ -1,0 +1,23 @@
+id: coding.standards.why-comments
+name: Why Comments Only
+category: coding.standards
+domain: guidance
+type: markdown
+executable: false
+version: 0.1.0
+author: orkestra-core
+description: >
+  Keeps comments focused on rationale rather than restating implementation.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [comments, readability]
+content: |
+  # Why Comments Only
+
+  - Use comments to explain why code exists or why a tradeoff was chosen.
+  - Do not comment obvious code behavior.
+  - Keep comments current when changing the surrounding code.
+  - Prefer clear names and structure over explanatory comments.
