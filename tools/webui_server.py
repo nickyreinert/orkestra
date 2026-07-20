@@ -490,6 +490,31 @@ def entity_installed_path(scope: str, entity_id: str) -> Path:
     return base / "entities" / rel
 
 
+def entity_scope_dir(scope: str) -> Path:
+    if scope == "global":
+        if sys.platform == "darwin":
+            return HOME_DIR / "Library" / "Application Support" / "orkestra"
+        if os.name == "nt":
+            return Path(os.environ.get("APPDATA", str(HOME_DIR / "AppData" / "Roaming"))) / "orkestra"
+        return HOME_DIR / ".orkestra"
+    return PROJECT_DIR / ".orkestra"
+
+
+def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
+    destination = entity_installed_path(scope, entity["id"])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source_rel = source_file.relative_to(ROOT).as_posix()
+    content = str(entity.get("content") or "").rstrip()
+    lines = [f"<!-- orkestra:entity id={entity['id']} source={source_rel} -->", content]
+    if entity.get("type") == "shell" and entity.get("entrypoint"):
+        lines.extend(["", f"Script: `scripts/{entity['entrypoint']}`"])
+        script_path = entity_scope_dir(scope) / "scripts" / str(entity["entrypoint"])
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(str(entity.get("content") or ""), encoding="utf-8")
+        script_path.chmod(0o755)
+    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def collect_entities_index() -> dict:
     source_dir = ROOT / "content" / "source"
     entities: list[dict] = []
@@ -1679,8 +1704,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/entities/update":
             data = self._read_json()
             entity_id = str(data.get("id") or "").strip()
+            targets = data.get("targets") if isinstance(data.get("targets"), list) else ["source"]
+            targets = [str(target).strip() for target in targets]
             if not entity_id or not safe_name(entity_id):
                 return self._send_json({"error": "Invalid plugin id"}, status=400)
+            if not targets or any(target not in {"source", "user", "project"} for target in targets):
+                return self._send_json({"error": "Select at least one valid save target"}, status=400)
             source_file = find_entity_source_file(entity_id)
             if source_file is None:
                 return self._send_json({"error": "Plugin not found"}, status=404)
@@ -1694,12 +1723,36 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 data["runtime"] = ""
                 data["entrypoint"] = ""
-            write_plugin_metadata(source_file, data)
-            if plugin_type == "shell":
-                script_file = source_file.parent / str(data["entrypoint"])
-                script_file.write_text(str(data.get("content") or ""), encoding="utf-8")
-                script_file.chmod(0o755)
-            return self._send_json({"ok": True, "entities": collect_entities_index()})
+            if "source" in targets:
+                write_plugin_metadata(source_file, data)
+                if plugin_type == "shell":
+                    script_file = source_file.parent / str(data["entrypoint"])
+                    script_file.write_text(str(data.get("content") or ""), encoding="utf-8")
+                    script_file.chmod(0o755)
+
+            entity = parse_entity_file(source_file)
+            if entity is None:
+                return self._send_json({"error": "Updated plugin could not be parsed"}, status=500)
+            if "source" not in targets:
+                entity["content"] = str(data.get("content") or "")
+                entity["type"] = plugin_type
+                entity["entrypoint"] = str(data.get("entrypoint") or entity.get("entrypoint") or "")
+            # User and project targets are intentional overrides of generated plugin files.
+            # If absent, enable once to create the index before replacing its content.
+            for target in targets:
+                if target == "source":
+                    continue
+                scope = "global" if target == "user" else "project"
+                destination = entity_installed_path(scope, entity_id)
+                if not destination.exists():
+                    ok, code, stdout, stderr = run_orkestra(["enable", entity_id, "--scope", scope])
+                    if not ok:
+                        return self._send_json(
+                            {"error": stderr.strip() or stdout.strip() or f"Could not enable {target} scope", "code": code},
+                            status=500,
+                        )
+                write_installed_plugin(scope, entity, source_file)
+            return self._send_json({"ok": True, "targets": targets, "entities": collect_entities_index()})
 
         if parsed.path == "/api/categories/create":
             data = self._read_json()

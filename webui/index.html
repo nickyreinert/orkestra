@@ -7,21 +7,16 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">ORKESTRA</div>
-    <div class="topbarActions">
-      <button type="button" id="commandBtn" class="iconButton tooltipTarget" aria-label="Open command menu" data-tooltip="Open command menu">⌘K</button>
-      <button type="button" id="settingsBtn" class="iconButton tooltipTarget" aria-label="Open settings" data-tooltip="Open settings">⚙</button>
-      <button type="button" id="helpBtn" class="iconButton tooltipTarget" aria-label="Open help" data-tooltip="Open help">?</button>
-    </div>
-    <div id="topbarPopover" class="topbarPopover" hidden></div>
-  </header>
-
   <main class="shell">
     <aside class="sidebar">
       <div class="sidebarHead">
+        <div class="brand">ORKESTRA</div>
         <h1>Plugins</h1>
         <input id="entitySearch" class="searchInput" type="search" placeholder="Search plugins">
+        <div class="sidebarDomains">
+          <div class="eyebrow">Domains</div>
+          <div id="domainFilters" class="domainFilters"></div>
+        </div>
       </div>
       <nav id="entityTree" class="entityTree" aria-label="Plugins"></nav>
     </aside>
@@ -40,16 +35,10 @@
             <span>Project</span>
             <input id="projectInput" type="text" readonly>
           </label>
-        </div>
-
-        <div class="agentRow">
-          <div class="eyebrow">Agents</div>
-          <div id="agentMatrix" class="agentMatrix"></div>
-        </div>
-
-        <div class="domainRow">
-          <div class="eyebrow">Domains</div>
-          <div id="domainFilters" class="domainFilters"></div>
+          <div class="agentsInline">
+            <div class="eyebrow">Agents</div>
+            <div id="agentMatrix" class="agentMatrix"></div>
+          </div>
         </div>
 
         <details class="metaApi">
@@ -141,6 +130,25 @@
   </main>
 
   <div id="floatingTooltip" class="floatingTooltip" hidden></div>
+  <dialog id="saveScopeDialog" class="saveScopeDialog" aria-labelledby="saveScopeTitle">
+    <form id="saveScopeForm" method="dialog">
+      <div class="dialogHead">
+        <div>
+          <div class="eyebrow">Save plugin</div>
+          <h2 id="saveScopeTitle">Where should these changes go?</h2>
+        </div>
+      </div>
+      <fieldset class="saveTargets">
+        <label><input id="saveToSource" type="checkbox" value="source"> <span><strong>Source</strong><small>Canonical plugin YAML and metadata</small></span></label>
+        <label><input id="saveToUser" type="checkbox" value="user"> <span><strong>User</strong><small>Global installed plugin for this user</small></span></label>
+        <label><input id="saveToProject" type="checkbox" value="project"> <span><strong>Project</strong><small>Installed plugin for the current project</small></span></label>
+      </fieldset>
+      <div class="dialogActions">
+        <button type="button" id="cancelSaveScopeBtn" class="smallButton">Cancel</button>
+        <button type="submit" id="confirmSaveScopeBtn" class="smallButton primaryButton">Save</button>
+      </div>
+    </form>
+  </dialog>
   <script src="/app.js"></script>
 </body>
 </html>

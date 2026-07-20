@@ -5,14 +5,15 @@ const agentMatrix = document.getElementById('agentMatrix');
 const domainFilters = document.getElementById('domainFilters');
 const sourcePathText = document.getElementById('sourcePathText');
 const installedPathText = document.getElementById('installedPathText');
-const commandBtn = document.getElementById('commandBtn');
-const settingsBtn = document.getElementById('settingsBtn');
-const helpBtn = document.getElementById('helpBtn');
-const topbarPopover = document.getElementById('topbarPopover');
 const floatingTooltip = document.getElementById('floatingTooltip');
 const saveContentBtn = document.getElementById('saveContentBtn');
 const copyAgentApiBtn = document.getElementById('copyAgentApiBtn');
 const agentApiEndpoint = document.getElementById('agentApiEndpoint');
+const saveScopeDialog = document.getElementById('saveScopeDialog');
+const saveScopeForm = document.getElementById('saveScopeForm');
+const cancelSaveScopeBtn = document.getElementById('cancelSaveScopeBtn');
+const confirmSaveScopeBtn = document.getElementById('confirmSaveScopeBtn');
+const saveTargetInputs = Array.from(document.querySelectorAll('.saveTargets input'));
 
 const entityIdEl = document.getElementById('entityId');
 const entityNameEl = document.getElementById('entityName');
@@ -45,7 +46,6 @@ let appState = {
   editingContentId: '',
   contentDirty: false,
   query: '',
-  activePopover: '',
 };
 
 function setStatus(message, kind = '') {
@@ -141,94 +141,6 @@ function selectEntity(id) {
   appState.editingContentId = '';
   appState.selectedId = id;
   render();
-}
-
-function closePopover() {
-  appState.activePopover = '';
-  topbarPopover.hidden = true;
-  topbarPopover.innerHTML = '';
-}
-
-function positionPopover(anchor) {
-  const anchorRect = anchor.getBoundingClientRect();
-  const popoverRect = topbarPopover.getBoundingClientRect();
-  const gap = 8;
-  const left = Math.min(
-    window.innerWidth - popoverRect.width - gap,
-    Math.max(gap, anchorRect.right - popoverRect.width),
-  );
-  topbarPopover.style.left = `${left}px`;
-  topbarPopover.style.top = `${anchorRect.bottom + gap}px`;
-}
-
-function openPopover(kind, anchor) {
-  if (appState.activePopover === kind && !topbarPopover.hidden) {
-    closePopover();
-    return;
-  }
-
-  appState.activePopover = kind;
-  topbarPopover.hidden = false;
-  topbarPopover.innerHTML = '';
-
-  const title = document.createElement('div');
-  title.className = 'popoverTitle';
-  title.textContent = kind === 'commands' ? 'Commands' : kind === 'settings' ? 'Settings' : 'Help';
-  topbarPopover.appendChild(title);
-
-  if (kind === 'commands') {
-    [
-      ['Focus search', () => entitySearch.focus()],
-      ['Toggle scope', () => {
-        appState.scope = appState.scope === 'global' ? 'project' : 'global';
-        render();
-      }],
-      ['Select first plugin', () => {
-        if (appState.entities[0]) selectEntity(appState.entities[0].id);
-      }],
-    ].forEach(([label, action]) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'popoverAction';
-      button.textContent = label;
-      button.onclick = () => {
-        action();
-        closePopover();
-      };
-      topbarPopover.appendChild(button);
-    });
-  } else if (kind === 'settings') {
-    const rows = [
-      ['Scope', appState.scope],
-      ['Agents', selectedAgentList().join(', ') || 'none'],
-      ['Project', projectInput.value || '-'],
-    ];
-    rows.forEach(([label, value]) => {
-      const row = document.createElement('div');
-      row.className = 'popoverMeta';
-      const labelEl = document.createElement('span');
-      labelEl.textContent = label;
-      const valueEl = document.createElement('strong');
-      valueEl.textContent = value;
-      row.appendChild(labelEl);
-      row.appendChild(valueEl);
-      topbarPopover.appendChild(row);
-    });
-  } else {
-    [
-      '+ installs an available plugin into the current scope.',
-      '- removes an installed plugin from the current scope.',
-      'Category and subcategory headers collapse or expand their plugin lists.',
-      'Use Ctrl/Command K to focus search.',
-    ].forEach((text) => {
-      const item = document.createElement('div');
-      item.className = 'popoverHelp';
-      item.textContent = text;
-      topbarPopover.appendChild(item);
-    });
-  }
-
-  positionPopover(anchor);
 }
 
 function renderScopeControls() {
@@ -659,7 +571,33 @@ async function disableSelected() {
   }
 }
 
-async function saveSelectedContent() {
+function rememberedSaveTargets() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('orkestra.saveTargets') || '');
+    if (Array.isArray(stored) && stored.every((target) => ['source', 'user', 'project'].includes(target))) return stored;
+  } catch (_) {
+    // Use the canonical source as the safe default when storage is unavailable.
+  }
+  return ['source'];
+}
+
+function selectedSaveTargets() {
+  return saveTargetInputs.filter((input) => input.checked).map((input) => input.value);
+}
+
+function updateSaveTargetSubmit() {
+  confirmSaveScopeBtn.disabled = selectedSaveTargets().length === 0;
+}
+
+function openSaveScopeDialog() {
+  const targets = rememberedSaveTargets();
+  saveTargetInputs.forEach((input) => { input.checked = targets.includes(input.value); });
+  updateSaveTargetSubmit();
+  saveScopeDialog.showModal();
+  confirmSaveScopeBtn.focus();
+}
+
+async function saveSelectedContent(targets) {
   const entity = currentEntity();
   if (!entity) return;
   try {
@@ -682,11 +620,12 @@ async function saveSelectedContent() {
       requiresTools: parseList(entityRequiresToolsEl.value),
       runtime: entityRuntimeEl.value,
       entrypoint: entityEntrypointEl.value,
+      targets,
     });
     await applyEntityIndex(data.entities);
     appState.contentDirty = false;
     appState.editingContentId = entity.id;
-    setStatus(`Saved ${entity.id}`, 'ok');
+    setStatus(`Saved ${entity.id} to ${targets.join(', ')}`, 'ok');
     render();
   } catch (error) {
     setStatus(error.message, 'error');
@@ -710,7 +649,21 @@ document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo te
   });
 });
 
-saveContentBtn.addEventListener('click', saveSelectedContent);
+saveContentBtn.addEventListener('click', openSaveScopeDialog);
+saveTargetInputs.forEach((input) => input.addEventListener('change', updateSaveTargetSubmit));
+cancelSaveScopeBtn.addEventListener('click', () => saveScopeDialog.close());
+saveScopeDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  saveScopeDialog.close();
+});
+saveScopeForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const targets = selectedSaveTargets();
+  if (targets.length === 0) return;
+  window.localStorage.setItem('orkestra.saveTargets', JSON.stringify(targets));
+  saveScopeDialog.close();
+  await saveSelectedContent(targets);
+});
 copyAgentApiBtn.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(`${window.location.origin}/api/agent-context`);
@@ -721,30 +674,11 @@ copyAgentApiBtn.addEventListener('click', async () => {
   }
 });
 
-commandBtn.addEventListener('click', () => openPopover('commands', commandBtn));
-settingsBtn.addEventListener('click', () => openPopover('settings', settingsBtn));
-helpBtn.addEventListener('click', () => openPopover('help', helpBtn));
-
 document.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
     entitySearch.focus();
-    closePopover();
   }
-  if (event.key === 'Escape') closePopover();
-});
-
-document.addEventListener('click', (event) => {
-  if (
-    topbarPopover.hidden ||
-    topbarPopover.contains(event.target) ||
-    commandBtn.contains(event.target) ||
-    settingsBtn.contains(event.target) ||
-    helpBtn.contains(event.target)
-  ) {
-    return;
-  }
-  closePopover();
 });
 
 function showTooltip(target) {
