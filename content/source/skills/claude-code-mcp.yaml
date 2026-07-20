@@ -1,0 +1,22 @@
+id: skills.claude-code-mcp
+name: Claude Code MCP
+category: skill
+version: 0.1.0
+author: orkestra-core
+description: >
+  MCP setup and operating guidance for Claude Code.
+compatibility:
+  agents: [claude]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [claude-code, mcp, tools]
+content: |
+  # Claude Code MCP
+
+  - Use standard Claude MCP config for external tools.
+  - Common servers include GitHub, Sentry, Postgres, and Obsidian.
+  - Configure per project for project-level integration definitions.
+  - Check active MCP servers with `/mcp`.
+  - Install only the MCPs that are needed; too many tools increase context cost.
+  - Treat MCP definitions as loaded context.

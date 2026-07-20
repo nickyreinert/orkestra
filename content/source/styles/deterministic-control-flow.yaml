@@ -1,0 +1,20 @@
+id: styles.deterministic-control-flow
+name: Deterministic Control Flow
+category: style
+version: 0.1.0
+author: orkestra-core
+description: >
+  Avoids reflective probing and exception-driven branching in hot or predictable paths.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [deterministic, control-flow, performance]
+content: |
+  # Deterministic Control Flow
+
+  - Do not use exceptions for normal branching in hot paths.
+  - Avoid `hasattr`, `getattr`, and `delattr` when deterministic structures are available.
+  - Use explicit data structures and clear state transitions.
+  - Prefer predictable conditionals over reflective probing.

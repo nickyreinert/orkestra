@@ -1,0 +1,22 @@
+id: skills.orkestra-agent-bridge
+name: Orkestra Agent Bridge
+category: skill
+version: 0.1.0
+author: orkestra-core
+description: >
+  Fallback protocol for updating Orkestra guidance through MCP or local HTTP APIs.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: [agent-styles.orkestra-agent-interface]
+tags: [orkestra, http-api, mcp]
+content: |
+  # Orkestra Agent Bridge
+
+  - Prefer MCP tools from `tools/orkestra_mcp_server.py`.
+  - If MCP is unavailable, use the local HTTP API from `tools/webui_server.py`.
+  - Edit only source files.
+  - Treat rendered files as read-only.
+  - Re-render after updates.
+  - Map MCP operations to HTTP endpoints when falling back.

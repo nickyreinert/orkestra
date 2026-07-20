@@ -1,0 +1,22 @@
+id: workflows.claude-code-daily
+name: Claude Code Daily Workflow
+category: workflow
+version: 0.1.0
+author: orkestra-core
+description: >
+  Daily Claude Code workflow patterns from the operational reference.
+compatibility:
+  agents: [claude]
+  scopes: [global, project]
+conflicts_with: []
+requires: [agent-styles.claude-code-operating-premises]
+tags: [claude-code, workflow, daily]
+content: |
+  # Claude Code Daily Workflow
+
+  - Reproduce a bug before fixing it.
+  - Use `/batch` for migrations and mass edits.
+  - Delegate unfamiliar code exploration to a subagent.
+  - Run multiple sessions in separate Git worktrees for parallel work.
+  - For review, pass session writes to a read-only session.
+  - Run three to five parallel sessions for throughput when useful.

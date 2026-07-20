@@ -1,0 +1,20 @@
+id: styles.small-files-functions
+name: Small Files And Functions
+category: style
+version: 0.1.0
+author: orkestra-core
+description: >
+  Keeps implementation units compact and grouped by concern.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [structure, readability, maintainability]
+content: |
+  # Small Files And Functions
+
+  - Prefer functions around 10 to 20 lines when practical.
+  - Keep files focused and avoid oversized modules.
+  - Group similar functions together.
+  - Add section markers only when they improve navigation.

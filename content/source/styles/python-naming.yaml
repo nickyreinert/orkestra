@@ -1,0 +1,21 @@
+id: styles.python-naming
+name: Python Naming
+category: style
+version: 0.1.0
+author: orkestra-core
+description: >
+  Python-oriented naming and file conventions from the existing templates.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [python, naming, files]
+content: |
+  # Python Naming
+
+  - Use descriptive `snake_case` function names.
+  - Use `snake_case.py` for Python files.
+  - Use `kebab-case.js` for JavaScript files.
+  - Name tests `test_<module>.py`.
+  - Group related functions in the same module.

@@ -1,0 +1,25 @@
+id: topologies.claude-code-project
+name: Claude Code Project Layout
+category: topology
+version: 0.1.0
+author: orkestra-core
+description: >
+  Claude Code project file layout and precedence from the operational reference.
+compatibility:
+  agents: [claude]
+  scopes: [project]
+conflicts_with: []
+requires: [agent-styles.claude-code-team-guardrails]
+tags: [claude-code, layout, claude-directory]
+content: |
+  # Claude Code Project Layout
+
+  - Use `.claude/` for project-level config committed to Git.
+  - Use `~/.claude/` for personal cross-project defaults.
+  - Use `.claude/CLAUDE.md` or root `CLAUDE.md` for team instructions.
+  - Use `CLAUDE.local.md` for ignored personal project preferences.
+  - Store project settings in `.claude/settings.json`.
+  - Store reusable expertise in `.claude/skills/`.
+  - Store custom subagents in `.claude/agents/`.
+  - Store path-gated rule files in `.claude/rules/`.
+  - More local rules override broader rules.

@@ -1,0 +1,21 @@
+id: styles.frontend-vanilla-modules
+name: Vanilla JavaScript Modules
+category: style
+version: 0.1.0
+author: orkestra-core
+description: >
+  Vanilla JS organization rules from the HTML/JS template.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [frontend, javascript, modules]
+content: |
+  # Vanilla JavaScript Modules
+
+  - Use modern ES6+ syntax.
+  - Prefer modules with explicit imports and exports.
+  - Use event delegation where it keeps code simpler.
+  - Avoid unnecessary global variables.
+  - Organize code by feature.

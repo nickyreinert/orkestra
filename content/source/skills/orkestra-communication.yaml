@@ -1,0 +1,22 @@
+id: skills.orkestra-communication
+name: Orkestra Communication Skill
+category: skill
+version: 0.1.0
+author: orkestra-core
+description: >
+  MCP-first workflow for agents editing Orkestra instructions and templates.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [global, project]
+conflicts_with: []
+requires: [agent-styles.orkestra-agent-interface]
+tags: [orkestra, mcp, render]
+content: |
+  # Orkestra Communication Skill
+
+  - Use Orkestra MCP tools for status, source listing, source reads, updates, rendering, and diffs.
+  - Prefer source mode for edits.
+  - Treat rendered mode as read-only observability.
+  - After source updates, run `orkestra_render_project`.
+  - If a project is not initialized, initialize it before rendering.
+  - For user-facing changes, show a source-vs-rendered diff.

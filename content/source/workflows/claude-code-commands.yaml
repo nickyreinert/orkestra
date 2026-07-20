@@ -1,0 +1,24 @@
+id: workflows.claude-code-commands
+name: Claude Code Command Habits
+category: workflow
+version: 0.1.0
+author: orkestra-core
+description: >
+  High-value Claude Code slash command habits from the operational reference.
+compatibility:
+  agents: [claude]
+  scopes: [global, project]
+conflicts_with: []
+requires: []
+tags: [claude-code, commands, productivity]
+content: |
+  # Claude Code Command Habits
+
+  - Use `/insights` for session analytics.
+  - Use `/compact` to summarize and reduce context.
+  - Use `/clear` for a fresh start.
+  - Use `/rewind` to undo to a checkpoint.
+  - Use `/goal` to set a verifiable completion condition.
+  - Use `/batch` for multiple file changes.
+  - Use `/loop` to iterate until a condition is met.
+  - Use `/fork` and `/teleport` for context branching and navigation.

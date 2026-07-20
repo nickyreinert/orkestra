@@ -1,0 +1,19 @@
+id: hooks.block-main-push
+name: Block Main Push
+category: hook
+version: 0.1.0
+author: orkestra-core
+description: >
+  Pre-push guard that prevents direct pushes to protected branch names.
+compatibility:
+  agents: [claude, codex, copilot, cursor, cline, aider]
+  scopes: [project]
+conflicts_with: []
+requires: []
+tags: [git, pre-push, safety]
+content: |
+  # Block Main Push Hook
+
+  - Event: `pre-push`.
+  - Block direct pushes to protected branches such as `main` and `master`.
+  - Use pull requests or explicit team process for protected branch updates.
