@@ -71,6 +71,38 @@ DOMAIN_META = {
     "enforcement": {"label": "Enforcement", "indicator": "◈"},
     "automation": {"label": "Automation", "indicator": "▶"},
 }
+CUSTOM_CATEGORY_REGISTRY = ROOT / "content" / "source" / ".orkestra-plugin-categories.json"
+PLUGIN_TYPES = {"markdown", "yaml", "shell"}
+
+
+def slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug[:64]
+
+
+def custom_categories() -> list[dict]:
+    if not CUSTOM_CATEGORY_REGISTRY.exists():
+        return []
+    try:
+        data = json.loads(CUSTOM_CATEGORY_REGISTRY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [item for item in data if isinstance(item, dict) and item.get("id") and item.get("main")]
+
+
+def save_custom_categories(categories: list[dict]) -> None:
+    CUSTOM_CATEGORY_REGISTRY.parent.mkdir(parents=True, exist_ok=True)
+    CUSTOM_CATEGORY_REGISTRY.write_text(json.dumps(categories, indent=2) + "\n", encoding="utf-8")
+
+
+def known_main_categories() -> set[str]:
+    return {item[0] for item in ENTITY_CATEGORY_TREE}
+
+
+def yaml_inline_list(values: object) -> str:
+    if not isinstance(values, list):
+        values = []
+    return "[" + ", ".join(str(item).strip() for item in values if str(item).strip()) + "]"
 
 
 def maybe_restart_on_server_change() -> None:
@@ -351,6 +383,99 @@ def replace_yaml_block(raw: str, key: str, value: str) -> str:
     return "\n".join(updated).rstrip("\n") + "\n"
 
 
+def replace_yaml_value(raw: str, key: str, value: str) -> str:
+    lines = raw.splitlines()
+    line = f"{key}: {value}"
+    for index, existing in enumerate(lines):
+        if re.fullmatch(rf"{re.escape(key)}\s*:\s*.*", existing):
+            lines[index] = line
+            return "\n".join(lines).rstrip("\n") + "\n"
+    return raw.rstrip("\n") + "\n" + line + "\n"
+
+
+def replace_yaml_compatibility(raw: str, agents: list[str], scopes: list[str], os_values: list[str]) -> str:
+    lines = raw.splitlines()
+    start = next((index for index, line in enumerate(lines) if re.fullmatch(r"compatibility\s*:\s*", line)), None)
+    block = ["compatibility:", f"  agents: {yaml_inline_list(agents)}", f"  scopes: {yaml_inline_list(scopes)}"]
+    if os_values:
+        block.append(f"  os: {yaml_inline_list(os_values)}")
+    if start is None:
+        return raw.rstrip("\n") + "\n" + "\n".join(block) + "\n"
+    end = start + 1
+    while end < len(lines) and (not lines[end] or lines[end].startswith((" ", "\t"))):
+        end += 1
+    return "\n".join(lines[:start] + block + lines[end:]).rstrip("\n") + "\n"
+
+
+def write_plugin_metadata(source_file: Path, data: dict) -> None:
+    raw = source_file.read_text(encoding="utf-8")
+    scalar_keys = ("name", "version", "author", "category", "domain", "type", "runtime", "entrypoint")
+    for key in scalar_keys:
+        if key in data:
+            raw = replace_yaml_value(raw, key, str(data[key]).strip())
+    if "executable" in data:
+        raw = replace_yaml_value(raw, "executable", "true" if data["executable"] else "false")
+    for key, payload_key in (("tags", "tags"), ("conflicts_with", "conflictsWith"), ("requires", "requires"), ("requires_tools", "requiresTools")):
+        if payload_key in data:
+            raw = replace_yaml_value(raw, key, yaml_inline_list(data[payload_key]))
+    if any(key in data for key in ("agents", "scopes", "os")):
+        raw = replace_yaml_compatibility(raw, data.get("agents", []), data.get("scopes", []), data.get("os", []))
+    raw = replace_yaml_block(raw, "description", str(data.get("description", "")))
+    raw = replace_yaml_block(raw, "content", str(data.get("content", "")))
+    source_file.write_text(raw, encoding="utf-8")
+
+
+def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
+    main, _, sub = category.partition(".")
+    if main not in known_main_categories() or not sub or not safe_name(sub):
+        raise ValueError("Invalid plugin category")
+    if plugin_type not in PLUGIN_TYPES:
+        raise ValueError("Plugin type must be markdown, yaml, or shell")
+    slug = slugify(name)
+    if not slug:
+        raise ValueError("Plugin name must contain letters or numbers")
+    entity_id = f"{category}.{slug}"
+    if find_entity_source_file(entity_id):
+        raise ValueError("A plugin with this id already exists")
+    source_file = ROOT / "content" / "source" / main / sub / f"{slug}.yaml"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    executable = plugin_type == "shell"
+    runtime = "bash" if executable else ""
+    entrypoint = f"{slug}.sh" if executable else ""
+    content = "#!/usr/bin/env bash\nset -euo pipefail\n\n# Add deterministic automation here.\n" if executable else (
+        "key: value\n" if plugin_type == "yaml" else "# New Plugin\n\nDescribe the instructions this plugin gives to coding agents.\n"
+    )
+    raw = "\n".join([
+        f"id: {entity_id}",
+        f"name: {name.strip()}",
+        f"category: {category}",
+        "domain: automation" if executable else "domain: guidance",
+        "version: 0.1.0",
+        "author: local",
+        "description: |",
+        "  Add a concise description for this plugin.",
+        f"type: {plugin_type}",
+        f"executable: {'true' if executable else 'false'}",
+        *( [f"runtime: {runtime}", f"entrypoint: {entrypoint}"] if executable else [] ),
+        "compatibility:",
+        "  agents: [claude, codex, copilot, cursor, cline, aider]",
+        "  scopes: [global, project]",
+        "conflicts_with: []",
+        "requires: []",
+        "requires_tools: []",
+        "tags: [custom]",
+        "content: |",
+        *[f"  {line}" if line else "" for line in content.splitlines()],
+        "",
+    ])
+    source_file.write_text(raw, encoding="utf-8")
+    if executable:
+        script_path = source_file.parent / entrypoint
+        script_path.write_text(content, encoding="utf-8")
+        script_path.chmod(0o755)
+    return parse_entity_file(source_file) or {}
+
+
 def entity_installed_path(scope: str, entity_id: str) -> Path:
     rel = Path(*entity_id.split(".")).with_suffix(".md")
     if scope == "global":
@@ -402,6 +527,19 @@ def collect_entities_index() -> dict:
             sub_out.append({"id": sub_id, "label": sub_label, "entities": categories.get(sub_id, [])})
         category_tree.append({"id": main_id, "label": main_label, "subcategories": sub_out})
 
+    for category in custom_categories():
+        category_id = str(category["id"])
+        main_id = str(category["main"])
+        if main_id not in known_main_categories() or category_id in known_subcategories:
+            continue
+        target = next((item for item in category_tree if item["id"] == main_id), None)
+        if target is None:
+            continue
+        target["subcategories"].append(
+            {"id": category_id, "label": str(category.get("label") or category_id.split(".", 1)[-1]), "entities": categories.get(category_id, [])}
+        )
+        known_subcategories.add(category_id)
+
     for cat in sorted(set(categories) - known_subcategories):
         main = cat.split(".", 1)[0]
         label = cat.split(".", 1)[1] if "." in cat else cat
@@ -415,7 +553,6 @@ def collect_entities_index() -> dict:
         {"id": sub["id"], "label": sub["label"], "entities": sub["entities"]}
         for main in category_tree
         for sub in main["subcategories"]
-        if sub["entities"]
     ]
 
     return {
@@ -1320,6 +1457,32 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/entities":
             return self._send_json(collect_entities_index())
 
+        if path in {"/api/meta", "/api/agent-context"}:
+            return self._send_json(
+                {
+                    "name": "Orkestra local agent API",
+                    "version": "0.1",
+                    "baseUrl": f"http://{HOST}:{PORT}",
+                    "skill": {
+                        "name": "orkestra-api",
+                        "purpose": "Inspect, create, edit, organize, and deploy Orkestra plugins through the local API.",
+                        "instructions": [
+                            "GET /api/entities lists plugins, hierarchy, installed state, and agent availability.",
+                            "POST /api/entities/create creates a markdown, yaml, or shell plugin in a category.",
+                            "POST /api/entities/update writes editable plugin metadata, description, and content.",
+                            "POST /api/entities/move moves a plugin to another second-level category.",
+                            "POST /api/entities/enable and /disable deploy or remove a plugin for a scope.",
+                        ],
+                    },
+                    "endpoints": [
+                        {"method": "GET", "path": "/api/entities", "purpose": "Plugin catalog and current deployment state"},
+                        {"method": "POST", "path": "/api/entities/create", "purpose": "Create a custom plugin"},
+                        {"method": "POST", "path": "/api/entities/update", "purpose": "Update a plugin"},
+                        {"method": "POST", "path": "/api/entities/move", "purpose": "Move a plugin between categories"},
+                    ],
+                }
+            )
+
         if path == "/api/dev-hash":
             return self._send_json(
                 {
@@ -1511,6 +1674,87 @@ class Handler(BaseHTTPRequestHandler):
             raw = source_file.read_text(encoding="utf-8")
             raw = replace_yaml_block(raw, "description", description)
             source_file.write_text(replace_yaml_block(raw, "content", content), encoding="utf-8")
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/update":
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            if not entity_id or not safe_name(entity_id):
+                return self._send_json({"error": "Invalid plugin id"}, status=400)
+            source_file = find_entity_source_file(entity_id)
+            if source_file is None:
+                return self._send_json({"error": "Plugin not found"}, status=404)
+            plugin_type = str(data.get("type") or "markdown")
+            if plugin_type not in PLUGIN_TYPES:
+                return self._send_json({"error": "Invalid plugin type"}, status=400)
+            data["executable"] = plugin_type == "shell"
+            if plugin_type == "shell":
+                data["runtime"] = str(data.get("runtime") or "bash")
+                data["entrypoint"] = str(data.get("entrypoint") or f"{entity_id.rsplit('.', 1)[-1]}.sh")
+            else:
+                data["runtime"] = ""
+                data["entrypoint"] = ""
+            write_plugin_metadata(source_file, data)
+            if plugin_type == "shell":
+                script_file = source_file.parent / str(data["entrypoint"])
+                script_file.write_text(str(data.get("content") or ""), encoding="utf-8")
+                script_file.chmod(0o755)
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/categories/create":
+            data = self._read_json()
+            main = str(data.get("main") or "").strip()
+            label = str(data.get("label") or "").strip()
+            slug = slugify(str(data.get("slug") or label))
+            if main not in known_main_categories() or not slug:
+                return self._send_json({"error": "Choose a top-level category and a valid name"}, status=400)
+            category_id = f"{main}.{slug}"
+            categories = custom_categories()
+            built_in = {sub_id for _, _, subs in ENTITY_CATEGORY_TREE for sub_id, _ in subs}
+            if category_id in built_in or any(item.get("id") == category_id for item in categories):
+                return self._send_json({"error": "This category already exists"}, status=409)
+            categories.append({"id": category_id, "main": main, "label": label})
+            save_custom_categories(categories)
+            return self._send_json({"ok": True, "category": category_id, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/create":
+            data = self._read_json()
+            try:
+                entity = create_plugin_source(
+                    str(data.get("category") or "").strip(),
+                    str(data.get("name") or "").strip(),
+                    str(data.get("type") or "markdown").strip(),
+                )
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            return self._send_json({"ok": True, "entity": entity, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/move":
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            category = str(data.get("category") or "").strip()
+            source_file = find_entity_source_file(entity_id) if safe_name(entity_id) else None
+            known_categories = {sub_id for _, _, subs in ENTITY_CATEGORY_TREE for sub_id, _ in subs}
+            known_categories.update(str(item.get("id")) for item in custom_categories())
+            if source_file is None or category not in known_categories:
+                return self._send_json({"error": "Invalid plugin or destination category"}, status=400)
+            source_entity = parse_entity_file(source_file)
+            if source_entity is None:
+                return self._send_json({"error": "Plugin source could not be parsed"}, status=400)
+            if source_entity.get("category") == category:
+                return self._send_json({"ok": True, "entities": collect_entities_index()})
+            main, _, sub = category.partition(".")
+            destination = ROOT / "content" / "source" / main / sub / source_file.name
+            if destination != source_file and destination.exists():
+                return self._send_json({"error": "A plugin with that filename already exists in the destination"}, status=409)
+            raw = replace_yaml_value(source_file.read_text(encoding="utf-8"), "category", category)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(raw, encoding="utf-8")
+            for sibling in source_file.parent.iterdir():
+                if sibling.is_file() and sibling.name != source_file.name and sibling.suffix == ".sh" and sibling.name == source_entity.get("entrypoint", ""):
+                    shutil.move(str(sibling), str(destination.parent / sibling.name))
+            if destination != source_file:
+                source_file.unlink()
             return self._send_json({"ok": True, "entities": collect_entities_index()})
 
         if parsed.path in {"/api/entities/enable", "/api/entities/disable"}:

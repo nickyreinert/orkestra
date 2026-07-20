@@ -51,6 +51,15 @@
           <div class="eyebrow">Domains</div>
           <div id="domainFilters" class="domainFilters"></div>
         </div>
+
+        <details class="metaApi">
+          <summary>META <span>Agent API and local skill</span></summary>
+          <div class="metaApiBody">
+            <code id="agentApiEndpoint">GET /api/agent-context</code>
+            <button type="button" id="copyAgentApiBtn" class="smallButton tooltipTarget" data-tooltip="Copy the local agent API endpoint">Copy</button>
+            <p>Give this endpoint to a coding agent so it can discover and manage the local plugin catalog.</p>
+          </div>
+        </details>
       </section>
 
       <section class="entityBody">
@@ -58,38 +67,59 @@
           <div class="entityTitleRow">
             <div>
               <div id="entityId" class="entityId">Select a plugin</div>
-              <h2 id="entityName">No plugin selected</h2>
+              <input id="entityName" class="entityNameInput" type="text" value="No plugin selected" aria-label="Plugin name">
             </div>
+            <button type="button" id="saveContentBtn" class="smallButton tooltipTarget" data-tooltip="Save plugin metadata and content">Save</button>
           </div>
           <textarea id="entityDescription" class="description descriptionInput" spellcheck="true">Choose a plugin from the sidebar.</textarea>
           <dl class="metaGrid">
             <div>
               <dt>Version</dt>
-              <dd id="entityVersion">-</dd>
+              <dd><input id="entityVersion" type="text" aria-label="Plugin version"></dd>
             </div>
             <div>
               <dt>Author</dt>
-              <dd id="entityAuthor">-</dd>
+              <dd><input id="entityAuthor" type="text" aria-label="Plugin author"></dd>
             </div>
             <div>
               <dt>Compatibility</dt>
-              <dd id="entityAgents">-</dd>
+              <dd><input id="entityAgents" type="text" aria-label="Compatible agents"></dd>
+            </div>
+            <div>
+              <dt>Scopes</dt>
+              <dd><input id="entityScopes" type="text" aria-label="Compatible scopes"></dd>
             </div>
             <div>
               <dt>Domain</dt>
-              <dd id="entityDomain">-</dd>
+              <dd><select id="entityDomain" aria-label="Plugin domain"><option value="guidance">Guidance</option><option value="enforcement">Enforcement</option><option value="automation">Automation</option></select></dd>
             </div>
             <div>
               <dt>Type</dt>
-              <dd id="entityType">-</dd>
-            </div>
-            <div>
-              <dt>Conflicts</dt>
-              <dd id="entityConflicts">-</dd>
+              <dd><select id="entityType" aria-label="Plugin type"><option value="markdown">Markdown</option><option value="yaml">YAML</option><option value="shell">Shell script</option></select></dd>
             </div>
             <div>
               <dt>Tags</dt>
-              <dd id="entityTags">-</dd>
+              <dd><input id="entityTags" type="text" aria-label="Plugin tags"></dd>
+            </div>
+            <div>
+              <dt>Requires</dt>
+              <dd><input id="entityRequires" type="text" aria-label="Required plugins"></dd>
+            </div>
+            <div>
+              <dt>Conflicts</dt>
+              <dd><input id="entityConflicts" type="text" aria-label="Conflicting plugins"></dd>
+            </div>
+            <div>
+              <dt>Tools</dt>
+              <dd><input id="entityRequiresTools" type="text" aria-label="Required tools"></dd>
+            </div>
+            <div class="shellOnly">
+              <dt>Runtime</dt>
+              <dd><input id="entityRuntime" type="text" aria-label="Script runtime"></dd>
+            </div>
+            <div class="shellOnly">
+              <dt>Entrypoint</dt>
+              <dd><input id="entityEntrypoint" type="text" aria-label="Script entrypoint"></dd>
             </div>
           </dl>
         </article>
@@ -98,7 +128,6 @@
           <div class="paneHead">
             <div class="paneTitle">
               <h2>Content</h2>
-              <button type="button" id="saveContentBtn" class="smallButton tooltipTarget" data-tooltip="Save plugin content to the source YAML">Save</button>
             </div>
             <div class="previewPaths" aria-label="Entity paths">
               <div><span>Source</span><code id="sourcePathText">-</code></div>

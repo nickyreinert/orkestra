@@ -7,7 +7,7 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Fallback protocol for updating Orkestra guidance through MCP or local HTTP APIs.
+  Local HTTP API contract for coding agents that manage Orkestra plugins.
 compatibility:
   agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [global, project]
@@ -17,9 +17,10 @@ tags: [orkestra, http-api, mcp]
 content: |
   # Orkestra Agent Bridge
 
-  - Prefer MCP tools from `tools/orkestra_mcp_server.py`.
-  - If MCP is unavailable, use the local HTTP API from `tools/webui_server.py`.
-  - Edit only source files.
-  - Treat rendered files as read-only.
-  - Re-render after updates.
-  - Map MCP operations to HTTP endpoints when falling back.
+  - Discover the local contract with `GET /api/agent-context`.
+  - Use `GET /api/entities` before changing the catalog.
+  - Create custom plugins with `POST /api/entities/create`.
+  - Update metadata, description, and content with `POST /api/entities/update`.
+  - Move plugins between second-level categories with `POST /api/entities/move`.
+  - Deploy plugins through `POST /api/entities/enable`; remove them through `/disable`.
+  - Treat installed files as generated output. Edit plugins through the API or source YAML.

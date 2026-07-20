@@ -11,6 +11,8 @@ const helpBtn = document.getElementById('helpBtn');
 const topbarPopover = document.getElementById('topbarPopover');
 const floatingTooltip = document.getElementById('floatingTooltip');
 const saveContentBtn = document.getElementById('saveContentBtn');
+const copyAgentApiBtn = document.getElementById('copyAgentApiBtn');
+const agentApiEndpoint = document.getElementById('agentApiEndpoint');
 
 const entityIdEl = document.getElementById('entityId');
 const entityNameEl = document.getElementById('entityName');
@@ -23,6 +25,11 @@ const entityTypeEl = document.getElementById('entityType');
 const entityConflictsEl = document.getElementById('entityConflicts');
 const entityTagsEl = document.getElementById('entityTags');
 const entityPreview = document.getElementById('entityPreview');
+const entityScopesEl = document.getElementById('entityScopes');
+const entityRequiresEl = document.getElementById('entityRequires');
+const entityRequiresToolsEl = document.getElementById('entityRequiresTools');
+const entityRuntimeEl = document.getElementById('entityRuntime');
+const entityEntrypointEl = document.getElementById('entityEntrypoint');
 
 let appState = {
   scope: 'global',
@@ -99,6 +106,17 @@ function matchesDomain(entity) {
 function formatList(values) {
   if (!Array.isArray(values) || values.length === 0) return '-';
   return values.join(', ');
+}
+
+function parseList(value) {
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function markDirty() {
+  const entity = currentEntity();
+  appState.editingContentId = entity?.id || '';
+  appState.contentDirty = true;
+  saveContentBtn.disabled = false;
 }
 
 function domainIndicator(domain) {
@@ -266,6 +284,55 @@ function renderDomainFilters() {
   });
 }
 
+async function applyEntityIndex(data) {
+  appState.entities = data.entities || [];
+  appState.categories = data.categories || [];
+  appState.categoryTree = data.categoryTree || [];
+  appState.domains = data.domains || [];
+}
+
+async function createCategory(main) {
+  const label = window.prompt(`New subcategory for ${main.toUpperCase()}`);
+  if (!label?.trim()) return;
+  try {
+    const data = await apiPost('/api/categories/create', { main, label: label.trim() });
+    await applyEntityIndex(data.entities);
+    appState.collapsedCategories.delete(data.category);
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
+async function createPlugin(category) {
+  const name = window.prompt(`Plugin name for ${category}`);
+  if (!name?.trim()) return;
+  const type = window.prompt('Plugin type: markdown, yaml, or shell', 'markdown');
+  if (!type) return;
+  try {
+    const data = await apiPost('/api/entities/create', { category, name: name.trim(), type: type.trim().toLowerCase() });
+    await applyEntityIndex(data.entities);
+    appState.selectedId = data.entity.id;
+    appState.collapsedCategories.delete(category);
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
+async function movePlugin(id, category) {
+  try {
+    const data = await apiPost('/api/entities/move', { id, category });
+    await applyEntityIndex(data.entities);
+    appState.selectedId = id;
+    appState.collapsedCategories.delete(category);
+    setStatus(`Moved ${id} to ${category}`, 'ok');
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
 function renderTree() {
   entityTree.innerHTML = '';
   const selected = currentEntity();
@@ -276,8 +343,7 @@ function renderTree() {
         .map((sub) => ({
           ...sub,
           entities: sub.entities.filter((entity) => matchesQuery(entity) && matchesDomain(entity)),
-        }))
-        .filter((sub) => sub.entities.length > 0),
+        })),
     }))
     .filter((main) => main.subcategories.length > 0);
 
@@ -300,6 +366,18 @@ function renderTree() {
     mainHeader.appendChild(mainChevron);
     mainHeader.appendChild(mainLabel);
     mainHeader.appendChild(mainCount);
+    const addCategory = document.createElement('span');
+    addCategory.className = 'miniButton tooltipTarget categoryAdd';
+    addCategory.role = 'button';
+    addCategory.tabIndex = 0;
+    addCategory.textContent = '+';
+    addCategory.setAttribute('aria-label', `Add a subcategory to ${main.label}`);
+    addCategory.dataset.tooltip = `Add a subcategory to ${main.label}`;
+    addCategory.onclick = (event) => {
+      event.stopPropagation();
+      createCategory(main.id);
+    };
+    mainHeader.appendChild(addCategory);
     mainHeader.onclick = () => {
       if (appState.collapsedCategories.has(main.id)) appState.collapsedCategories.delete(main.id);
       else appState.collapsedCategories.add(main.id);
@@ -334,6 +412,18 @@ function renderTree() {
       header.appendChild(subLabel);
       header.appendChild(subId);
       header.appendChild(count);
+      const addPlugin = document.createElement('span');
+      addPlugin.className = 'miniButton tooltipTarget categoryAdd';
+      addPlugin.role = 'button';
+      addPlugin.tabIndex = 0;
+      addPlugin.textContent = '+';
+      addPlugin.setAttribute('aria-label', `Add a plugin to ${category.label}`);
+      addPlugin.dataset.tooltip = `Add a plugin to ${category.label}`;
+      addPlugin.onclick = (event) => {
+        event.stopPropagation();
+        createPlugin(category.id);
+      };
+      header.appendChild(addPlugin);
       header.onclick = () => {
         if (appState.collapsedCategories.has(category.id)) appState.collapsedCategories.delete(category.id);
         else appState.collapsedCategories.add(category.id);
@@ -346,6 +436,19 @@ function renderTree() {
         return;
       }
 
+      section.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        section.classList.add('dropTarget');
+      });
+      section.addEventListener('dragleave', () => section.classList.remove('dropTarget'));
+      section.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        section.classList.remove('dropTarget');
+        const id = event.dataTransfer.getData('text/orkestra-plugin');
+        if (!id || id === category.entities.find((item) => item.id === id)?.id) return;
+        await movePlugin(id, category.id);
+      });
+
       category.entities.forEach((entity) => {
         const installed = isInstalled(entity);
         const row = document.createElement('button');
@@ -355,6 +458,11 @@ function renderTree() {
         row.classList.toggle('installed', installed);
         row.classList.toggle('blocked', isBlocked(entity));
         row.setAttribute('aria-label', `Select plugin ${entity.id}`);
+        row.draggable = true;
+        row.addEventListener('dragstart', (event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/orkestra-plugin', entity.id);
+        });
         row.onclick = () => selectEntity(entity.id);
 
         const indicator = document.createElement('span');
@@ -439,9 +547,9 @@ function renderDetails() {
   const entity = currentEntity();
   if (!entity) {
     entityIdEl.textContent = 'Select a plugin';
-    entityNameEl.textContent = 'No plugin selected';
+    entityNameEl.value = 'No plugin selected';
     entityDescriptionEl.value = 'Choose a plugin from the sidebar.';
-    entityDescriptionEl.disabled = true;
+    document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = true; });
     entityPreview.value = '# Content';
     entityPreview.disabled = true;
     saveContentBtn.disabled = true;
@@ -453,21 +561,24 @@ function renderDetails() {
 
   appState.selectedId = entity.id;
   entityIdEl.textContent = `${entity.id}${entity.version ? `  v${entity.version}` : ''}`;
-  entityNameEl.textContent = entity.name;
-  entityDescriptionEl.disabled = false;
-  entityVersionEl.textContent = entity.version || '-';
-  entityAuthorEl.textContent = entity.author || '-';
-  entityAgentsEl.textContent = formatList(entity.agents);
-  entityDomainEl.textContent = domainLabel(entity);
-  entityTypeEl.textContent = entity.entrypoint
-    ? `${entity.type} · ${entity.runtime || '-'} · ${entity.entrypoint}`
-    : entity.type || '-';
-  entityConflictsEl.textContent = formatList(entity.conflictsWith);
-  entityTagsEl.textContent = formatList(entity.tags);
+  document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = false; });
   entityPreview.disabled = false;
   saveContentBtn.disabled = !appState.contentDirty || appState.editingContentId !== entity.id;
   if (appState.editingContentId !== entity.id || !appState.contentDirty) {
+    entityNameEl.value = entity.name || '';
     entityDescriptionEl.value = entity.description || '';
+    entityVersionEl.value = entity.version || '';
+    entityAuthorEl.value = entity.author || '';
+    entityAgentsEl.value = formatList(entity.agents).replace('-', '');
+    entityScopesEl.value = formatList(entity.scopes).replace('-', '');
+    entityDomainEl.value = entity.domain || 'guidance';
+    entityTypeEl.value = entity.type || 'markdown';
+    entityConflictsEl.value = formatList(entity.conflictsWith).replace('-', '');
+    entityTagsEl.value = formatList(entity.tags).replace('-', '');
+    entityRequiresEl.value = formatList(entity.requires).replace('-', '');
+    entityRequiresToolsEl.value = formatList(entity.requiresTools).replace('-', '');
+    entityRuntimeEl.value = entity.runtime || '';
+    entityEntrypointEl.value = entity.entrypoint || '';
     entityPreview.value = entity.content || '';
     appState.editingContentId = entity.id;
     appState.contentDirty = false;
@@ -478,6 +589,9 @@ function renderDetails() {
     ? entity.installPaths?.[appState.scope] || '-'
     : 'Not installed in current scope';
   installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
+  document.querySelectorAll('.shellOnly').forEach((field) => {
+    field.hidden = entityTypeEl.value !== 'shell';
+  });
 }
 
 function render() {
@@ -503,6 +617,10 @@ async function refresh() {
   if (!appState.selectedId && appState.entities.length) {
     appState.selectedId = appState.entities[0].id;
   }
+  if (appState.collapsedCategories.size === 0) {
+    appState.categoryTree.forEach((main) => main.subcategories.forEach((subcategory) => appState.collapsedCategories.add(subcategory.id)));
+  }
+  agentApiEndpoint.textContent = `GET ${window.location.origin}/api/agent-context`;
   render();
 }
 
@@ -516,10 +634,7 @@ async function installSelected() {
       scope: appState.scope,
       agents: Array.from(appState.selectedAgents),
     });
-    appState.entities = data.entities.entities || [];
-    appState.categories = data.entities.categories || [];
-    appState.categoryTree = data.entities.categoryTree || [];
-    appState.domains = data.entities.domains || [];
+    await applyEntityIndex(data.entities);
     setStatus(`Installed ${entity.id}`, 'ok');
     render();
   } catch (error) {
@@ -536,10 +651,7 @@ async function disableSelected() {
       id: entity.id,
       scope: appState.scope,
     });
-    appState.entities = data.entities.entities || [];
-    appState.categories = data.entities.categories || [];
-    appState.categoryTree = data.entities.categoryTree || [];
-    appState.domains = data.entities.domains || [];
+    await applyEntityIndex(data.entities);
     setStatus(`Disabled ${entity.id}`, 'ok');
     render();
   } catch (error) {
@@ -553,18 +665,28 @@ async function saveSelectedContent() {
   try {
     saveContentBtn.disabled = true;
     setStatus(`Saving ${entity.id} content ...`);
-    const data = await apiPost('/api/entities/save-content', {
+    const data = await apiPost('/api/entities/update', {
       id: entity.id,
+      name: entityNameEl.value,
       description: entityDescriptionEl.value,
       content: entityPreview.value,
+      version: entityVersionEl.value,
+      author: entityAuthorEl.value,
+      agents: parseList(entityAgentsEl.value),
+      scopes: parseList(entityScopesEl.value),
+      domain: entityDomainEl.value,
+      type: entityTypeEl.value,
+      tags: parseList(entityTagsEl.value),
+      conflictsWith: parseList(entityConflictsEl.value),
+      requires: parseList(entityRequiresEl.value),
+      requiresTools: parseList(entityRequiresToolsEl.value),
+      runtime: entityRuntimeEl.value,
+      entrypoint: entityEntrypointEl.value,
     });
-    appState.entities = data.entities.entities || [];
-    appState.categories = data.entities.categories || [];
-    appState.categoryTree = data.entities.categoryTree || [];
-    appState.domains = data.entities.domains || [];
+    await applyEntityIndex(data.entities);
     appState.contentDirty = false;
     appState.editingContentId = entity.id;
-    setStatus(`Saved source content for ${entity.id}`, 'ok');
+    setStatus(`Saved ${entity.id}`, 'ok');
     render();
   } catch (error) {
     setStatus(error.message, 'error');
@@ -577,21 +699,27 @@ entitySearch.addEventListener('input', () => {
   renderTree();
 });
 
-entityPreview.addEventListener('input', () => {
-  const entity = currentEntity();
-  appState.editingContentId = entity?.id || '';
-  appState.contentDirty = true;
-  saveContentBtn.disabled = false;
-});
-
-entityDescriptionEl.addEventListener('input', () => {
-  const entity = currentEntity();
-  appState.editingContentId = entity?.id || '';
-  appState.contentDirty = true;
-  saveContentBtn.disabled = false;
+entityPreview.addEventListener('input', markDirty);
+document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((field) => {
+  field.addEventListener('input', markDirty);
+  field.addEventListener('change', () => {
+    if (field === entityTypeEl) {
+      document.querySelectorAll('.shellOnly').forEach((item) => { item.hidden = entityTypeEl.value !== 'shell'; });
+    }
+    markDirty();
+  });
 });
 
 saveContentBtn.addEventListener('click', saveSelectedContent);
+copyAgentApiBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(`${window.location.origin}/api/agent-context`);
+    copyAgentApiBtn.textContent = 'Copied';
+    window.setTimeout(() => { copyAgentApiBtn.textContent = 'Copy'; }, 1200);
+  } catch (error) {
+    setStatus('Could not copy agent API endpoint', 'error');
+  }
+});
 
 commandBtn.addEventListener('click', () => openPopover('commands', commandBtn));
 settingsBtn.addEventListener('click', () => openPopover('settings', settingsBtn));
