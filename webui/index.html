@@ -3,88 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Orkestra Template Manager</title>
+  <title>Orkestra</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="topbarSection topbarLeft">
-      <h1>Orkestra</h1>
-    </div>
-    <div class="topbarSection topbarCenter">
-      <span id="projectPath" class="projectPath"></span>
-    </div>
-    <div class="topbarSection topbarRight">
-      <div id="agentFilters" class="agentFilters"></div>
+    <div class="brand">ORKESTRA</div>
+    <div class="topbarPath" id="projectPath"></div>
+    <div class="topbarActions">
+      <button type="button" class="iconButton" title="Command menu">⌘K</button>
+      <button type="button" class="iconButton" title="Settings">⚙</button>
+      <button type="button" class="iconButton" title="Help">?</button>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="topRow">
-      <section class="panel filesPanel">
-        <div class="filesGrid" id="filesGrid">
-          <section class="fileColumn sourceColumn" id="sourceFileColumn">
-            <div class="columnHead">
-              <h2>A: Source (Orkestra)</h2>
-            </div>
-            <div id="sourceColumn" class="sourceContent"></div>
-          </section>
+  <main class="shell">
+    <aside class="sidebar">
+      <div class="sidebarHead">
+        <h1>Entities</h1>
+        <input id="entitySearch" class="searchInput" type="search" placeholder="Search">
+      </div>
+      <nav id="entityTree" class="entityTree" aria-label="Entities"></nav>
+    </aside>
 
-          <section class="fileColumn">
-            <div class="columnHead">
-              <h2>B: Global</h2>
-              <div class="columnHeadControls" id="globalHeaderControls"></div>
+    <section class="workspace">
+      <section class="controlBand">
+        <div class="scopeRow">
+          <div>
+            <div class="eyebrow">Scope</div>
+            <div class="segmented" role="group" aria-label="Scope">
+              <button type="button" class="segment active" data-scope="global">Global</button>
+              <button type="button" class="segment" data-scope="project">Project</button>
             </div>
-            <div id="globalColumn"></div>
-          </section>
+          </div>
+          <label class="projectSelector">
+            <span>Project</span>
+            <input id="projectInput" type="text" readonly>
+          </label>
+        </div>
 
-          <section class="fileColumn">
-            <div class="columnHead">
-              <h2>C: Project</h2>
-              <div class="columnHeadControls" id="renderedHeaderControls"></div>
-            </div>
-            <div id="renderedColumn"></div>
-          </section>
+        <div class="agentRow">
+          <div class="eyebrow">Agents</div>
+          <div id="agentMatrix" class="agentMatrix"></div>
         </div>
       </section>
-    </section>
 
-    <section class="panel previewPanel">
-      <div class="previewGrid" id="previewGrid">
-        <section class="previewCol" id="leftCol">
-          <div class="previewColHead">
-            <span id="leftMeta">Preview: -</span>
-            <label class="compareCheckLabel" id="compareCheckLabel" hidden>
-              <input type="checkbox" id="compareCheckbox"> Compare
-            </label>
+      <section class="entityBody">
+        <article class="entityInfo">
+          <div class="entityTitleRow">
+            <div>
+              <div id="entityId" class="entityId">Select an entity</div>
+              <h2 id="entityName">No entity selected</h2>
+            </div>
+            <button type="button" id="viewFileBtn" class="iconButton" title="View source file">↗</button>
           </div>
-          <textarea id="leftEditor" spellcheck="false" placeholder="Select a file pill above..."></textarea>
-        </section>
-
-        <section class="previewCol" id="rightCol" hidden>
-          <div class="previewColHead">
-            <span id="rightMeta">Compare: -</span>
+          <p id="entityDescription" class="description">Choose an entity from the sidebar.</p>
+          <dl class="metaGrid">
+            <div>
+              <dt>Version</dt>
+              <dd id="entityVersion">-</dd>
+            </div>
+            <div>
+              <dt>Author</dt>
+              <dd id="entityAuthor">-</dd>
+            </div>
+            <div>
+              <dt>Compatibility</dt>
+              <dd id="entityAgents">-</dd>
+            </div>
+            <div>
+              <dt>Conflicts</dt>
+              <dd id="entityConflicts">-</dd>
+            </div>
+            <div>
+              <dt>Tags</dt>
+              <dd id="entityTags">-</dd>
+            </div>
+          </dl>
+          <div class="actionRow">
+            <button type="button" id="installBtn" class="primaryButton">Install into scope</button>
+            <button type="button" id="disableBtn" class="secondaryButton">Disable</button>
           </div>
-          <textarea id="rightEditor" spellcheck="false" placeholder="Click any file to compare..."></textarea>
-        </section>
+        </article>
 
-        <div id="diffVisual" class="diffVisual" hidden></div>
-      </div>
+        <article class="previewPane">
+          <div class="paneHead">
+            <h2>Preview</h2>
+            <span id="statusText" class="statusText"></span>
+          </div>
+          <pre id="entityPreview" class="markdownPreview"># Preview</pre>
+        </article>
+      </section>
     </section>
   </main>
-
-  <div class="modalBackdrop" id="confirmModal" hidden>
-    <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalBody">
-      <div class="modalHead">
-        <h2 id="confirmModalTitle">Confirm Apply</h2>
-      </div>
-      <div class="modalBody" id="confirmModalBody"></div>
-      <div class="modalActions">
-        <button type="button" class="modalBtn modalBtnSecondary" id="confirmModalCancel">Cancel</button>
-        <button type="button" class="modalBtn modalBtnPrimary" id="confirmModalConfirm">Apply</button>
-      </div>
-    </div>
-  </div>
 
   <script src="/app.js"></script>
 </body>

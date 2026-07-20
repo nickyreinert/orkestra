@@ -51,6 +51,7 @@ def watch_signature(paths: list[Path]) -> str:
 
 
 SERVER_SIGNATURE = watch_signature(SERVER_WATCH_FILES)
+ENTITY_CATEGORY_ORDER = ["style", "topology", "skill", "workflow", "hook", "agent-style", "general"]
 
 
 def maybe_restart_on_server_change() -> None:
@@ -167,6 +168,165 @@ def collect_extras() -> list[dict]:
                 }
             )
     return out
+
+
+def normalize_entity_category(category: str) -> str:
+    aliases = {
+        "styles": "style",
+        "topologies": "topology",
+        "skills": "skill",
+        "workflows": "workflow",
+        "hooks": "hook",
+        "agent-styles": "agent-style",
+    }
+    return aliases.get(category, category)
+
+
+def parse_entity_file(path: Path) -> dict | None:
+    if not path.exists() or not path.is_file():
+        return None
+
+    raw = path.read_text(encoding="utf-8")
+    data: dict = {}
+    if HAS_YAML:
+        try:
+            loaded = yaml.safe_load(raw)
+            if isinstance(loaded, dict):
+                data = loaded
+        except Exception as exc:
+            print(f"Warning: failed to parse entity {path}: {exc}", file=sys.stderr)
+
+    if not data:
+        block_key = None
+        block_lines: list[str] = []
+        nested_key = ""
+        for line in raw.splitlines():
+            if block_key:
+                if line and not line.startswith(" "):
+                    if block_key == "description":
+                        data[block_key] = " ".join(part.strip() for part in block_lines if part.strip())
+                    else:
+                        data[block_key] = "\n".join(block_lines).rstrip() + "\n"
+                    block_key = None
+                    block_lines = []
+                else:
+                    block_lines.append(line[2:] if line.startswith("  ") else line)
+                    continue
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if not line.startswith(" ") and value == "":
+                data.setdefault(key, {})
+                nested_key = key
+            elif line.startswith("  ") and nested_key:
+                child_key = key
+                if value.startswith("[") and value.endswith("]"):
+                    data.setdefault(nested_key, {})[child_key] = [
+                        item.strip().strip("\"'") for item in value[1:-1].split(",") if item.strip()
+                    ]
+                else:
+                    data.setdefault(nested_key, {})[child_key] = value.strip("\"'")
+            elif value in {"|", ">"}:
+                block_key = key
+                block_lines = []
+                nested_key = ""
+            elif value.startswith("[") and value.endswith("]"):
+                data[key] = [item.strip().strip("\"'") for item in value[1:-1].split(",") if item.strip()]
+                nested_key = ""
+            else:
+                data[key] = value.strip("\"'")
+                nested_key = ""
+        if block_key:
+            if block_key == "description":
+                data[block_key] = " ".join(part.strip() for part in block_lines if part.strip())
+            else:
+                data[block_key] = "\n".join(block_lines).rstrip() + "\n"
+
+    entity_id = str(data.get("id") or "").strip()
+    if not entity_id:
+        return None
+
+    category = normalize_entity_category(str(data.get("category") or entity_id.split(".", 1)[0]))
+    rel_path = path.relative_to(ROOT).as_posix()
+    content = str(data.get("content") or "")
+    compatibility = data.get("compatibility") if isinstance(data.get("compatibility"), dict) else {}
+
+    def list_value(value) -> list[str]:
+        if isinstance(value, list):
+            return [str(v) for v in value]
+        if isinstance(value, str):
+            return [v.strip() for v in value.strip("[]").split(",") if v.strip()]
+        return []
+
+    return {
+        "id": entity_id,
+        "name": str(data.get("name") or entity_id),
+        "category": category,
+        "version": str(data.get("version") or ""),
+        "author": str(data.get("author") or ""),
+        "description": str(data.get("description") or "").strip(),
+        "agents": list_value(compatibility.get("agents")),
+        "scopes": list_value(compatibility.get("scopes")),
+        "conflictsWith": list_value(data.get("conflicts_with")),
+        "requires": list_value(data.get("requires")),
+        "tags": list_value(data.get("tags")),
+        "content": content,
+        "path": rel_path,
+    }
+
+
+def entity_installed_path(scope: str, entity_id: str) -> Path:
+    rel = Path(*entity_id.split(".")).with_suffix(".md")
+    if scope == "global":
+        if sys.platform == "darwin":
+            base = HOME_DIR / "Library" / "Application Support" / "orkestra"
+        elif os.name == "nt":
+            base = Path(os.environ.get("APPDATA", str(HOME_DIR / "AppData" / "Roaming"))) / "orkestra"
+        else:
+            base = HOME_DIR / ".orkestra"
+    else:
+        base = PROJECT_DIR / ".orkestra"
+    return base / "entities" / rel
+
+
+def collect_entities_index() -> dict:
+    source_dir = ROOT / "content" / "source"
+    entities: list[dict] = []
+    if source_dir.exists():
+        for path in sorted(source_dir.rglob("*.y*ml")):
+            entity = parse_entity_file(path)
+            if not entity:
+                continue
+            installed = {
+                "project": entity_installed_path("project", entity["id"]).exists(),
+                "global": entity_installed_path("global", entity["id"]).exists(),
+            }
+            entity["installed"] = installed
+            entities.append(entity)
+
+    categories: dict[str, list[dict]] = {}
+    for entity in entities:
+        categories.setdefault(entity["category"], []).append(entity)
+
+    ordered_categories = [
+        {"id": cat, "label": cat.replace("-", " ").title(), "entities": categories[cat]}
+        for cat in ENTITY_CATEGORY_ORDER
+        if cat in categories
+    ]
+    for cat in sorted(set(categories) - set(ENTITY_CATEGORY_ORDER)):
+        ordered_categories.append({"id": cat, "label": cat.replace("-", " ").title(), "entities": categories[cat]})
+
+    return {
+        "entities": entities,
+        "categories": ordered_categories,
+        "agents": list_agents(),
+        "project": {
+            "path": str(PROJECT_DIR),
+            "initialized": (PROJECT_DIR / ".orkestra").is_dir(),
+        },
+    }
 
 
 def collect_project_items_with_status() -> dict:
@@ -1047,6 +1207,9 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
 
+        if path == "/api/entities":
+            return self._send_json(collect_entities_index())
+
         if path == "/api/dev-hash":
             return self._send_json(
                 {
@@ -1219,6 +1382,30 @@ class Handler(BaseHTTPRequestHandler):
             candidate.parent.mkdir(parents=True, exist_ok=True)
             candidate.write_text(content, encoding="utf-8")
             return self._send_json({"ok": True, "path": rel})
+
+        if parsed.path in {"/api/entities/enable", "/api/entities/disable"}:
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            scope = str(data.get("scope") or "project").strip()
+            agents = data.get("agents") if isinstance(data.get("agents"), list) else []
+
+            if not entity_id:
+                return self._send_json({"error": "Missing entity id"}, status=400)
+            if scope not in {"project", "global"}:
+                return self._send_json({"error": "Invalid scope"}, status=400)
+
+            command = "enable" if parsed.path.endswith("/enable") else "disable"
+            args = [command, entity_id, "--scope", scope]
+            if command == "enable" and agents:
+                args.extend(["--agents", ",".join(str(agent) for agent in agents)])
+
+            ok, code, stdout, stderr = run_orkestra(args)
+            if not ok:
+                return self._send_json(
+                    {"error": stderr.strip() or stdout.strip() or f"orkestra {command} failed", "code": code},
+                    status=500,
+                )
+            return self._send_json({"ok": True, "stdout": stdout, "entities": collect_entities_index()})
 
         if parsed.path == "/api/compare-files":
             data = self._read_json()
