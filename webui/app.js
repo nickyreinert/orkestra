@@ -5,6 +5,7 @@ const agentMatrix = document.getElementById('agentMatrix');
 const domainFilters = document.getElementById('domainFilters');
 const sourcePathText = document.getElementById('sourcePathText');
 const installedPathText = document.getElementById('installedPathText');
+const pluginFileTabs = document.getElementById('pluginFileTabs');
 const floatingTooltip = document.getElementById('floatingTooltip');
 const saveContentBtn = document.getElementById('saveContentBtn');
 const copyAgentApiBtn = document.getElementById('copyAgentApiBtn');
@@ -44,6 +45,8 @@ let appState = {
   collapsedCategories: new Set(),
   selectedId: '',
   editingContentId: '',
+  activeFileByEntity: new Map(),
+  fileEdits: new Map(),
   contentDirty: false,
   query: '',
 };
@@ -115,8 +118,68 @@ function parseList(value) {
 function markDirty() {
   const entity = currentEntity();
   appState.editingContentId = entity?.id || '';
+  const activeFile = activeEditableFile(entity);
+  if (entity && activeFile) {
+    appState.fileEdits.set(`${entity.id}:${activeFile.path}`, entityPreview.value);
+  }
   appState.contentDirty = true;
   saveContentBtn.disabled = false;
+}
+
+function editableFiles(entity) {
+  if (!entity || !Array.isArray(entity.editableFiles)) return [];
+  return entity.editableFiles;
+}
+
+function defaultEditableFile(entity) {
+  const files = editableFiles(entity);
+  return files.find((file) => file.role === 'instructions')
+    || files.find((file) => file.role === 'script')
+    || files.find((file) => file.role === 'legacy')
+    || files[0]
+    || null;
+}
+
+function activeEditableFile(entity) {
+  const files = editableFiles(entity);
+  const activePath = entity ? appState.activeFileByEntity.get(entity.id) : '';
+  return files.find((file) => file.path === activePath) || defaultEditableFile(entity);
+}
+
+function editedFileContent(entity, file) {
+  if (!entity || !file) return '';
+  const key = `${entity.id}:${file.path}`;
+  return appState.fileEdits.has(key) ? appState.fileEdits.get(key) : (file.content || '');
+}
+
+function rememberActiveEditorValue(entity) {
+  if (!entity || appState.editingContentId !== entity.id) return;
+  const file = activeEditableFile(entity);
+  if (!file) return;
+  appState.fileEdits.set(`${entity.id}:${file.path}`, entityPreview.value);
+}
+
+function pluginDirectoryName(entity) {
+  if (!entity || !entity.path) return entity?.id?.split('.').pop() || 'plugin';
+  const parts = entity.path.split('/');
+  return parts.length > 1 ? parts[parts.length - 2] : entity.id.split('.').pop();
+}
+
+function installedAssetPath(entity, file) {
+  if (!entity || !file || !isInstalled(entity)) return 'Not installed in current scope';
+  const base = entity.installPaths?.[appState.scope] || '-';
+  const root = entity.installRoots?.[appState.scope] || (appState.scope === 'project' ? '.orkestra' : '~/.config/orkestra');
+  if (file.role === 'instructions' || file.role === 'legacy') return base;
+  if (file.role === 'script') return appState.scope === 'project'
+    ? `.orkestra/bin/${file.label.split('/').pop()}`
+    : `${root}/bin/${file.label.split('/').pop()}`;
+  if (file.role === 'config') {
+    const name = pluginDirectoryName(entity);
+    return appState.scope === 'project'
+      ? `.orkestra/config/${name}/${file.label}`
+      : `${root}/config/${name}/${file.label}`;
+  }
+  return base;
 }
 
 function domainIndicator(domain) {
@@ -464,6 +527,7 @@ function renderDetails() {
     document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = true; });
     entityPreview.value = '# Content';
     entityPreview.disabled = true;
+    pluginFileTabs.innerHTML = '';
     saveContentBtn.disabled = true;
     sourcePathText.textContent = '-';
     installedPathText.textContent = 'Not installed in current scope';
@@ -472,6 +536,8 @@ function renderDetails() {
   }
 
   appState.selectedId = entity.id;
+  const activeFile = activeEditableFile(entity);
+  if (activeFile) appState.activeFileByEntity.set(entity.id, activeFile.path);
   entityIdEl.textContent = `${entity.id}${entity.version ? `  v${entity.version}` : ''}`;
   document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = false; });
   entityPreview.disabled = false;
@@ -491,18 +557,46 @@ function renderDetails() {
     entityRequiresToolsEl.value = formatList(entity.requiresTools).replace('-', '');
     entityRuntimeEl.value = entity.runtime || '';
     entityEntrypointEl.value = entity.entrypoint || '';
-    entityPreview.value = entity.content || '';
+    entityPreview.value = editedFileContent(entity, activeFile) || '';
     appState.editingContentId = entity.id;
     appState.contentDirty = false;
     saveContentBtn.disabled = true;
   }
-  sourcePathText.textContent = entity.path || '-';
-  installedPathText.textContent = isInstalled(entity)
-    ? entity.installPaths?.[appState.scope] || '-'
-    : 'Not installed in current scope';
+  renderPluginFileTabs(entity);
+  sourcePathText.textContent = activeFile?.path || entity.path || '-';
+  installedPathText.textContent = installedAssetPath(entity, activeFile);
   installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
   document.querySelectorAll('.shellOnly').forEach((field) => {
     field.hidden = entityTypeEl.value !== 'shell';
+  });
+}
+
+function renderPluginFileTabs(entity) {
+  pluginFileTabs.innerHTML = '';
+  const files = editableFiles(entity);
+  if (files.length <= 1) {
+    pluginFileTabs.hidden = files.length === 0;
+    return;
+  }
+  pluginFileTabs.hidden = false;
+  const activeFile = activeEditableFile(entity);
+  files.forEach((file) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'pluginFileTab tooltipTarget';
+    tab.classList.toggle('active', activeFile && activeFile.path === file.path);
+    tab.textContent = file.label || file.path;
+    tab.dataset.tooltip = `${file.role}: ${file.path}`;
+    tab.onclick = () => {
+      rememberActiveEditorValue(entity);
+      appState.activeFileByEntity.set(entity.id, file.path);
+      appState.editingContentId = entity.id;
+      entityPreview.value = editedFileContent(entity, file);
+      sourcePathText.textContent = file.path;
+      installedPathText.textContent = installedAssetPath(entity, file);
+      renderPluginFileTabs(entity);
+    };
+    pluginFileTabs.appendChild(tab);
   });
 }
 
@@ -600,6 +694,17 @@ function openSaveScopeDialog() {
 async function saveSelectedContent(targets) {
   const entity = currentEntity();
   if (!entity) return;
+  rememberActiveEditorValue(entity);
+  const files = editableFiles(entity);
+  const fileContents = {};
+  files.forEach((file) => {
+    const key = `${entity.id}:${file.path}`;
+    if (appState.fileEdits.has(key)) fileContents[file.path] = appState.fileEdits.get(key);
+  });
+  const instructionFile = files.find((file) => file.role === 'instructions')
+    || files.find((file) => file.role === 'legacy')
+    || activeEditableFile(entity);
+  const instructionContent = instructionFile ? editedFileContent(entity, instructionFile) : entityPreview.value;
   try {
     saveContentBtn.disabled = true;
     setStatus(`Saving ${entity.id} content ...`);
@@ -607,7 +712,8 @@ async function saveSelectedContent(targets) {
       id: entity.id,
       name: entityNameEl.value,
       description: entityDescriptionEl.value,
-      content: entityPreview.value,
+      content: instructionContent,
+      fileContents,
       version: entityVersionEl.value,
       author: entityAuthorEl.value,
       agents: parseList(entityAgentsEl.value),
@@ -623,6 +729,7 @@ async function saveSelectedContent(targets) {
       targets,
     });
     await applyEntityIndex(data.entities);
+    files.forEach((file) => appState.fileEdits.delete(`${entity.id}:${file.path}`));
     appState.contentDirty = false;
     appState.editingContentId = entity.id;
     setStatus(`Saved ${entity.id} to ${targets.join(', ')}`, 'ok');

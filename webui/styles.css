@@ -807,6 +807,54 @@ textarea {
   color: var(--danger);
 }
 
+.pluginFileTabs {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-color: #3a3a3a transparent;
+  scrollbar-width: thin;
+}
+
+.pluginFileTabs::-webkit-scrollbar {
+  height: 8px;
+}
+
+.pluginFileTabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pluginFileTabs::-webkit-scrollbar-thumb {
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: #3a3a3a;
+}
+
+.pluginFileTab {
+  flex: 0 0 auto;
+  max-width: 230px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  color: var(--muted);
+  background: #101010;
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pluginFileTab:hover,
+.pluginFileTab.active {
+  border-color: rgba(94, 234, 212, 0.55);
+  color: var(--accent);
+}
+
 .markdownPreview {
   width: 100%;
   min-width: 0;

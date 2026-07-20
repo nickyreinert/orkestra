@@ -323,12 +323,56 @@ def parse_entity_file(path: Path) -> dict | None:
             return [v.strip() for v in value.strip("[]").split(",") if v.strip()]
         return []
 
+    editable_files = [
+        {
+            "path": rel_path,
+            "label": path.name,
+            "role": "manifest" if path.name == "manifest.yaml" else "legacy",
+            "type": "yaml",
+            "content": raw,
+        }
+    ]
+    if instruction_file and instruction_file.is_file():
+        editable_files.append(
+            {
+                "path": instruction_file.relative_to(ROOT).as_posix(),
+                "label": "instructions.md",
+                "role": "instructions",
+                "type": "markdown",
+                "content": instruction_file.read_text(encoding="utf-8"),
+            }
+        )
     plugin_scripts = sorted((plugin_dir / "bin").glob("*.sh")) if plugin_dir and (plugin_dir / "bin").is_dir() else []
     plugin_configs = []
     if plugin_dir:
         plugin_configs.extend(item.name for item in (plugin_dir / "config.json", plugin_dir / "config.yaml", plugin_dir / "config.yml") if item.is_file())
         if (plugin_dir / "config").is_dir():
             plugin_configs.extend(item.relative_to(plugin_dir).as_posix() for item in sorted((plugin_dir / "config").rglob("*")) if item.is_file())
+        for rel_config in plugin_configs:
+            config_path = plugin_dir / rel_config
+            editable_files.append(
+                {
+                    "path": config_path.relative_to(ROOT).as_posix(),
+                    "label": rel_config,
+                    "role": "config",
+                    "type": "json" if config_path.suffix == ".json" else "yaml",
+                    "content": config_path.read_text(encoding="utf-8"),
+                }
+            )
+    elif data.get("entrypoint"):
+        sibling_script = path.parent / str(data.get("entrypoint"))
+        if sibling_script.is_file():
+            plugin_scripts.append(sibling_script)
+    for script_path in plugin_scripts:
+        editable_files.append(
+            {
+                "path": script_path.relative_to(ROOT).as_posix(),
+                "label": script_path.relative_to(plugin_dir).as_posix() if plugin_dir else script_path.name,
+                "role": "script",
+                "type": "shell",
+                "content": script_path.read_text(encoding="utf-8"),
+            }
+        )
     agents = list_value(compatibility.get("agents")) if compatibility else list_value(compatibility_raw)
     plugin_type = str(data.get("type") or ("shell" if plugin_scripts else "markdown"))
     return {
@@ -358,6 +402,7 @@ def parse_entity_file(path: Path) -> dict | None:
         "pluginFormat": "directory" if plugin_dir else "legacy-file",
         "configAssets": plugin_configs,
         "scriptAssets": [item.name for item in plugin_scripts],
+        "editableFiles": editable_files,
     }
 
 
@@ -442,6 +487,25 @@ def write_plugin_metadata(source_file: Path, data: dict) -> None:
     else:
         raw = replace_yaml_block(raw, "content", str(data.get("content", "")))
     source_file.write_text(raw, encoding="utf-8")
+
+
+def write_plugin_editable_file(entity_id: str, rel_path: str, content: str) -> None:
+    source_file = find_entity_source_file(entity_id)
+    if source_file is None:
+        raise ValueError("Plugin not found")
+    entity = parse_entity_file(source_file)
+    if entity is None:
+        raise ValueError("Plugin source could not be parsed")
+    allowed = {str(item.get("path")) for item in entity.get("editableFiles", [])}
+    if rel_path not in allowed:
+        raise ValueError("Editable plugin file not found")
+    target = (ROOT / rel_path).resolve()
+    source_root = (ROOT / "content" / "source").resolve()
+    if source_root not in target.parents:
+        raise ValueError("Editable plugin path must stay below content/source")
+    target.write_text(content, encoding="utf-8")
+    if target.name.endswith(".sh"):
+        target.chmod(0o755)
 
 
 def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
@@ -529,11 +593,57 @@ def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
     lines = [f"<!-- orkestra:entity id={entity['id']} source={source_rel} -->", content]
     if entity.get("type") == "shell" and entity.get("entrypoint"):
         lines.extend(["", f"Tool: `bin/{entity['entrypoint']}`"])
+    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    source_plugin_dir = source_file.parent if source_file.name == "manifest.yaml" else None
+    if source_plugin_dir:
+        bin_dir = source_plugin_dir / "bin"
+        if bin_dir.is_dir():
+            for script_source in sorted(bin_dir.glob("*.sh")):
+                script_path = entity_scope_dir(scope) / "bin" / script_source.name
+                script_path.parent.mkdir(parents=True, exist_ok=True)
+                script_path.write_text(script_source.read_text(encoding="utf-8"), encoding="utf-8")
+                script_path.chmod(0o755)
+        config_targets = [source_plugin_dir / name for name in ("config.json", "config.yaml", "config.yml")]
+        if (source_plugin_dir / "config").is_dir():
+            config_targets.extend(item for item in sorted((source_plugin_dir / "config").rglob("*")) if item.is_file())
+        for config_source in config_targets:
+            if not config_source.is_file():
+                continue
+            rel_config = config_source.relative_to(source_plugin_dir).as_posix()
+            config_path = entity_scope_dir(scope) / "config" / source_plugin_dir.name / rel_config
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(config_source.read_text(encoding="utf-8"), encoding="utf-8")
+    elif entity.get("type") == "shell" and entity.get("entrypoint"):
+        script_source = source_file.parent / str(entity["entrypoint"])
+        script_content = script_source.read_text(encoding="utf-8") if script_source.is_file() else str(entity.get("content") or "")
         script_path = entity_scope_dir(scope) / "bin" / str(entity["entrypoint"])
         script_path.parent.mkdir(parents=True, exist_ok=True)
-        script_path.write_text(str(entity.get("content") or ""), encoding="utf-8")
+        script_path.write_text(script_content, encoding="utf-8")
         script_path.chmod(0o755)
-    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def write_installed_plugin_asset(scope: str, entity: dict, source_file: Path, rel_path: str, content: str) -> None:
+    target_rel = Path(rel_path)
+    if source_file.name == "manifest.yaml":
+        plugin_dir = source_file.parent
+        try:
+            asset_rel = (ROOT / rel_path).resolve().relative_to(plugin_dir.resolve())
+        except ValueError:
+            return
+        if asset_rel.parts and asset_rel.parts[0] == "bin":
+            destination = entity_scope_dir(scope) / "bin" / asset_rel.name
+        elif asset_rel.parts and (asset_rel.parts[0].startswith("config.") or asset_rel.parts[0] == "config"):
+            destination = entity_scope_dir(scope) / "config" / plugin_dir.name / asset_rel
+        else:
+            return
+    elif target_rel.name == str(entity.get("entrypoint") or ""):
+        destination = entity_scope_dir(scope) / "bin" / target_rel.name
+    else:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(content, encoding="utf-8")
+    if destination.name.endswith(".sh"):
+        destination.chmod(0o755)
 
 
 def collect_entities_index() -> dict:
@@ -553,8 +663,13 @@ def collect_entities_index() -> dict:
                 "project": str(project_install_path.relative_to(PROJECT_DIR)),
                 "global": str(entity_installed_path("global", entity["id"])),
             }
+            install_roots = {
+                "project": str(entity_scope_dir("project").relative_to(PROJECT_DIR)),
+                "global": str(entity_scope_dir("global")),
+            }
             entity["installed"] = installed
             entity["installPaths"] = install_paths
+            entity["installRoots"] = install_roots
             entities.append(entity)
 
     categories: dict[str, list[dict]] = {}
@@ -1727,6 +1842,8 @@ class Handler(BaseHTTPRequestHandler):
             entity_id = str(data.get("id") or "").strip()
             targets = data.get("targets") if isinstance(data.get("targets"), list) else ["source"]
             targets = [str(target).strip() for target in targets]
+            file_contents = data.get("fileContents") if isinstance(data.get("fileContents"), dict) else {}
+            file_contents = {str(path): str(content) for path, content in file_contents.items()}
             if not entity_id or not safe_name(entity_id):
                 return self._send_json({"error": "Invalid plugin id"}, status=400)
             if not targets or any(target not in {"source", "user", "project"} for target in targets):
@@ -1734,6 +1851,13 @@ class Handler(BaseHTTPRequestHandler):
             source_file = find_entity_source_file(entity_id)
             if source_file is None:
                 return self._send_json({"error": "Plugin not found"}, status=404)
+            source_entity = parse_entity_file(source_file)
+            if source_entity is None:
+                return self._send_json({"error": "Plugin source could not be parsed"}, status=500)
+            editable_files = source_entity.get("editableFiles", [])
+            instruction_file = next((item for item in editable_files if item.get("role") in {"instructions", "legacy"}), None)
+            if instruction_file and str(instruction_file.get("path")) in file_contents:
+                data["content"] = file_contents[str(instruction_file["path"])]
             plugin_type = str(data.get("type") or "markdown")
             if plugin_type not in PLUGIN_TYPES:
                 return self._send_json({"error": "Invalid plugin type"}, status=400)
@@ -1746,12 +1870,11 @@ class Handler(BaseHTTPRequestHandler):
                 data["entrypoint"] = ""
             if "source" in targets:
                 write_plugin_metadata(source_file, data)
-                if plugin_type == "shell":
-                    script_dir = source_file.parent / "bin" if source_file.name == "manifest.yaml" else source_file.parent
-                    script_dir.mkdir(parents=True, exist_ok=True)
-                    script_file = script_dir / str(data["entrypoint"])
-                    script_file.write_text(str(data.get("content") or ""), encoding="utf-8")
-                    script_file.chmod(0o755)
+                for rel_path, content in file_contents.items():
+                    try:
+                        write_plugin_editable_file(entity_id, rel_path, content)
+                    except ValueError as exc:
+                        return self._send_json({"error": str(exc)}, status=400)
 
             entity = parse_entity_file(source_file)
             if entity is None:
@@ -1775,6 +1898,8 @@ class Handler(BaseHTTPRequestHandler):
                             status=500,
                         )
                 write_installed_plugin(scope, entity, source_file)
+                for rel_path, content in file_contents.items():
+                    write_installed_plugin_asset(scope, entity, source_file, rel_path, content)
             return self._send_json({"ok": True, "targets": targets, "entities": collect_entities_index()})
 
         if parsed.path == "/api/categories/create":
