@@ -5,11 +5,9 @@ const agentMatrix = document.getElementById('agentMatrix');
 const domainFilters = document.getElementById('domainFilters');
 const sourcePathText = document.getElementById('sourcePathText');
 const installedPathText = document.getElementById('installedPathText');
-const pluginFileTabs = document.getElementById('pluginFileTabs');
+const pluginFilesList = document.getElementById('pluginFilesList');
 const floatingTooltip = document.getElementById('floatingTooltip');
 const saveContentBtn = document.getElementById('saveContentBtn');
-const copyAgentApiBtn = document.getElementById('copyAgentApiBtn');
-const agentApiEndpoint = document.getElementById('agentApiEndpoint');
 const saveScopeDialog = document.getElementById('saveScopeDialog');
 const saveScopeForm = document.getElementById('saveScopeForm');
 const cancelSaveScopeBtn = document.getElementById('cancelSaveScopeBtn');
@@ -37,12 +35,33 @@ const entityDomainEl = document.getElementById('entityDomain');
 const entityTypeEl = document.getElementById('entityType');
 const entityConflictsEl = document.getElementById('entityConflicts');
 const entityTagsEl = document.getElementById('entityTags');
-const entityPreview = document.getElementById('entityPreview');
 const entityScopesEl = document.getElementById('entityScopes');
 const entityRequiresEl = document.getElementById('entityRequires');
 const entityRequiresToolsEl = document.getElementById('entityRequiresTools');
 const entityRuntimeEl = document.getElementById('entityRuntime');
 const entityEntrypointEl = document.getElementById('entityEntrypoint');
+const settingsBtn = document.getElementById('settingsBtn');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const mainView = document.getElementById('mainView');
+const settingsView = document.getElementById('settingsView');
+const agentsConfigEditor = document.getElementById('agentsConfigEditor');
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+const agentApiBtn = document.getElementById('agentApiBtn');
+const agentApiDialog = document.getElementById('agentApiDialog');
+const agentApiModalEndpoint = document.getElementById('agentApiModalEndpoint');
+const copyAgentApiModalBtn = document.getElementById('copyAgentApiModalBtn');
+const addPluginFileBtn = document.getElementById('addPluginFileBtn');
+const deletePluginBtn = document.getElementById('deletePluginBtn');
+const assetDialog = document.getElementById('assetDialog');
+const assetForm = document.getElementById('assetForm');
+const assetName = document.getElementById('assetName');
+const assetError = document.getElementById('assetError');
+const cancelAssetBtn = document.getElementById('cancelAssetBtn');
+const removeConfirmDialog = document.getElementById('removeConfirmDialog');
+const removeConfirmTitle = document.getElementById('removeConfirmTitle');
+const removeConfirmText = document.getElementById('removeConfirmText');
+const cancelRemoveBtn = document.getElementById('cancelRemoveBtn');
+const confirmRemoveBtn = document.getElementById('confirmRemoveBtn');
 
 let appState = {
   scope: 'global',
@@ -62,6 +81,7 @@ let appState = {
   contentDirty: false,
   query: '',
   creation: null,
+  removal: null,
 };
 
 function setStatus(message, kind = '') {
@@ -131,9 +151,9 @@ function parseList(value) {
 function markDirty() {
   const entity = currentEntity();
   appState.editingContentId = entity?.id || '';
-  const activeFile = activeEditableFile(entity);
-  if (entity && activeFile) {
-    appState.fileEdits.set(`${entity.id}:${activeFile.path}`, entityPreview.value);
+  const editor = arguments[0]?.target;
+  if (entity && editor?.dataset?.filePath) {
+    appState.fileEdits.set(`${entity.id}:${editor.dataset.filePath}`, editor.value);
   }
   appState.contentDirty = true;
   saveContentBtn.disabled = false;
@@ -165,11 +185,40 @@ function editedFileContent(entity, file) {
   return appState.fileEdits.has(key) ? appState.fileEdits.get(key) : (file.content || '');
 }
 
-function rememberActiveEditorValue(entity) {
-  if (!entity || appState.editingContentId !== entity.id) return;
-  const file = activeEditableFile(entity);
-  if (!file) return;
-  appState.fileEdits.set(`${entity.id}:${file.path}`, entityPreview.value);
+function selectedValues(select) {
+  return Array.from(select.selectedOptions || []).map((option) => option.value);
+}
+
+function checkboxValues(container) {
+  return Array.from(container.querySelectorAll('input:checked')).map((input) => input.value);
+}
+
+function renderCheckboxGroup(container, options, selected, prefix) {
+  container.innerHTML = '';
+  options.forEach(({ value, label }) => {
+    const field = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = value;
+    input.checked = selected.includes(value);
+    input.id = `${prefix}-${value}`;
+    input.onchange = markDirty;
+    const text = document.createElement('span');
+    text.textContent = label;
+    field.append(input, text);
+    container.appendChild(field);
+  });
+}
+
+function renderPluginSelect(select, selected, entityId) {
+  select.innerHTML = '';
+  appState.entities.filter((item) => item.id !== entityId).forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.name || item.id;
+    option.selected = selected.includes(item.id);
+    select.appendChild(option);
+  });
 }
 
 function pluginDirectoryName(entity) {
@@ -446,11 +495,6 @@ function renderTree() {
       };
       section.appendChild(header);
 
-      if (collapsed) {
-        mainSection.appendChild(section);
-        return;
-      }
-
       section.addEventListener('dragover', (event) => {
         event.preventDefault();
         section.classList.add('dropTarget');
@@ -460,9 +504,14 @@ function renderTree() {
         event.preventDefault();
         section.classList.remove('dropTarget');
         const id = event.dataTransfer.getData('text/orkestra-plugin');
-        if (!id || id === category.entities.find((item) => item.id === id)?.id) return;
+        if (!id) return;
         await movePlugin(id, category.id);
       });
+
+      if (collapsed) {
+        mainSection.appendChild(section);
+        return;
+      }
 
       category.entities.forEach((entity) => {
         const row = document.createElement('div');
@@ -532,10 +581,10 @@ function renderDetails() {
     entityNameEl.value = 'No plugin selected';
     entityDescriptionEl.value = 'Choose a plugin from the sidebar.';
     document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = true; });
-    entityPreview.value = '# Content';
-    entityPreview.disabled = true;
-    pluginFileTabs.innerHTML = '';
+    pluginFilesList.innerHTML = '';
     saveContentBtn.disabled = true;
+    addPluginFileBtn.disabled = true;
+    deletePluginBtn.disabled = true;
     sourcePathText.textContent = '-';
     installedPathText.textContent = 'Not installed in current scope';
     installedPathText.className = 'pathValue';
@@ -543,67 +592,75 @@ function renderDetails() {
   }
 
   appState.selectedId = entity.id;
-  const activeFile = activeEditableFile(entity);
-  if (activeFile) appState.activeFileByEntity.set(entity.id, activeFile.path);
+  addPluginFileBtn.disabled = entity.pluginFormat !== 'directory';
+  addPluginFileBtn.dataset.tooltip = entity.pluginFormat === 'directory'
+    ? 'Add a shell, YAML, or Markdown file'
+    : 'Additional files require a directory-format plugin';
+  deletePluginBtn.disabled = false;
+  const activeFile = defaultEditableFile(entity);
   entityIdEl.textContent = `${entity.id}${entity.version ? `  v${entity.version}` : ''}`;
   document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((input) => { input.disabled = false; });
-  entityPreview.disabled = false;
   saveContentBtn.disabled = !appState.contentDirty || appState.editingContentId !== entity.id;
   if (appState.editingContentId !== entity.id || !appState.contentDirty) {
     entityNameEl.value = entity.name || '';
     entityDescriptionEl.value = entity.description || '';
     entityVersionEl.value = entity.version || '';
     entityAuthorEl.value = entity.author || '';
-    entityAgentsEl.value = formatList(entity.agents).replace('-', '');
-    entityScopesEl.value = formatList(entity.scopes).replace('-', '');
+    renderCheckboxGroup(entityAgentsEl, appState.agents.map((agent) => ({ value: agent, label: agent })), entity.agents || [], 'agent');
+    renderCheckboxGroup(entityScopesEl, [{ value: 'global', label: 'User' }, { value: 'project', label: 'Project' }], entity.scopes || [], 'scope');
     entityDomainEl.value = entity.domain || 'guidance';
     entityTypeEl.value = entity.type || 'markdown';
-    entityConflictsEl.value = formatList(entity.conflictsWith).replace('-', '');
+    renderPluginSelect(entityConflictsEl, entity.conflictsWith || [], entity.id);
     entityTagsEl.value = formatList(entity.tags).replace('-', '');
-    entityRequiresEl.value = formatList(entity.requires).replace('-', '');
+    renderPluginSelect(entityRequiresEl, entity.requires || [], entity.id);
     entityRequiresToolsEl.value = formatList(entity.requiresTools).replace('-', '');
     entityRuntimeEl.value = entity.runtime || '';
     entityEntrypointEl.value = entity.entrypoint || '';
-    entityPreview.value = editedFileContent(entity, activeFile) || '';
     appState.editingContentId = entity.id;
     appState.contentDirty = false;
     saveContentBtn.disabled = true;
   }
-  renderPluginFileTabs(entity);
-  sourcePathText.textContent = activeFile?.path || entity.path || '-';
-  installedPathText.textContent = installedAssetPath(entity, activeFile);
+  renderPluginFiles(entity);
+  sourcePathText.textContent = `${editableFiles(entity).length} file${editableFiles(entity).length === 1 ? '' : 's'}`;
+  installedPathText.textContent = isInstalled(entity) ? 'Installed in selected scope' : 'Not installed in selected scope';
   installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
   document.querySelectorAll('.shellOnly').forEach((field) => {
     field.hidden = entityTypeEl.value !== 'shell';
   });
 }
 
-function renderPluginFileTabs(entity) {
-  pluginFileTabs.innerHTML = '';
-  const files = editableFiles(entity);
-  if (files.length <= 1) {
-    pluginFileTabs.hidden = files.length === 0;
-    return;
-  }
-  pluginFileTabs.hidden = false;
-  const activeFile = activeEditableFile(entity);
-  files.forEach((file) => {
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'pluginFileTab tooltipTarget';
-    tab.classList.toggle('active', activeFile && activeFile.path === file.path);
-    tab.textContent = file.label || file.path;
-    tab.dataset.tooltip = `${file.role}: ${file.path}`;
-    tab.onclick = () => {
-      rememberActiveEditorValue(entity);
-      appState.activeFileByEntity.set(entity.id, file.path);
-      appState.editingContentId = entity.id;
-      entityPreview.value = editedFileContent(entity, file);
-      sourcePathText.textContent = file.path;
-      installedPathText.textContent = installedAssetPath(entity, file);
-      renderPluginFileTabs(entity);
-    };
-    pluginFileTabs.appendChild(tab);
+function renderPluginFiles(entity) {
+  pluginFilesList.innerHTML = '';
+  editableFiles(entity).forEach((file) => {
+    const card = document.createElement('section');
+    card.className = 'pluginFile';
+    const head = document.createElement('div');
+    head.className = 'pluginFileHead';
+    const label = document.createElement('strong');
+    label.textContent = file.label || file.path;
+    const paths = document.createElement('code');
+    paths.textContent = `${file.path}${isInstalled(entity) ? `  ->  ${installedAssetPath(entity, file)}` : ''}`;
+    const title = document.createElement('div');
+    title.append(label, paths);
+    head.appendChild(title);
+    if (['script', 'config', 'document'].includes(file.role)) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'miniButton dangerButton tooltipTarget';
+      remove.textContent = '−';
+      remove.dataset.tooltip = `Remove ${file.label}`;
+      remove.setAttribute('aria-label', `Remove ${file.label}`);
+      remove.onclick = () => removePluginFile(entity, file);
+      head.appendChild(remove);
+    }
+    const editor = document.createElement('textarea');
+    editor.className = 'markdownPreview pluginFileEditor';
+    editor.dataset.filePath = file.path;
+    editor.spellcheck = false;
+    editor.value = editedFileContent(entity, file);
+    editor.addEventListener('input', markDirty);
+    card.append(head, editor);
+    pluginFilesList.appendChild(card);
   });
 }
 
@@ -634,7 +691,6 @@ async function refresh() {
   if (appState.collapsedCategories.size === 0) {
     appState.categoryTree.forEach((main) => main.subcategories.forEach((subcategory) => appState.collapsedCategories.add(subcategory.id)));
   }
-  agentApiEndpoint.textContent = `GET ${window.location.origin}/api/agent-context`;
   render();
 }
 
@@ -696,7 +752,6 @@ function openSaveScopeDialog() {
 async function saveSelectedContent(targets) {
   const entity = currentEntity();
   if (!entity) return;
-  rememberActiveEditorValue(entity);
   const files = editableFiles(entity);
   const fileContents = {};
   files.forEach((file) => {
@@ -706,7 +761,7 @@ async function saveSelectedContent(targets) {
   const instructionFile = files.find((file) => file.role === 'instructions')
     || files.find((file) => file.role === 'legacy')
     || activeEditableFile(entity);
-  const instructionContent = instructionFile ? editedFileContent(entity, instructionFile) : entityPreview.value;
+  const instructionContent = instructionFile ? editedFileContent(entity, instructionFile) : '';
   try {
     saveContentBtn.disabled = true;
     setStatus(`Saving ${entity.id} content ...`);
@@ -718,13 +773,13 @@ async function saveSelectedContent(targets) {
       fileContents,
       version: entityVersionEl.value,
       author: entityAuthorEl.value,
-      agents: parseList(entityAgentsEl.value),
-      scopes: parseList(entityScopesEl.value),
+      agents: checkboxValues(entityAgentsEl),
+      scopes: checkboxValues(entityScopesEl),
       domain: entityDomainEl.value,
       type: entityTypeEl.value,
       tags: parseList(entityTagsEl.value),
-      conflictsWith: parseList(entityConflictsEl.value),
-      requires: parseList(entityRequiresEl.value),
+      conflictsWith: selectedValues(entityConflictsEl),
+      requires: selectedValues(entityRequiresEl),
       requiresTools: parseList(entityRequiresToolsEl.value),
       runtime: entityRuntimeEl.value,
       entrypoint: entityEntrypointEl.value,
@@ -742,12 +797,84 @@ async function saveSelectedContent(targets) {
   }
 }
 
+async function createPluginFile() {
+  const entity = currentEntity();
+  const name = assetName.value.trim();
+  const type = assetForm.querySelector('input[name="assetType"]:checked')?.value || 'shell';
+  if (!entity || !name) return;
+  const data = await apiPost('/api/entities/assets/create', { id: entity.id, name, type });
+  await applyEntityIndex(data.entities);
+  appState.fileEdits.clear();
+  appState.contentDirty = false;
+  render();
+}
+
+function confirmRemoval(title, text) {
+  return new Promise((resolve) => {
+    appState.removal = resolve;
+    removeConfirmTitle.textContent = title;
+    removeConfirmText.textContent = text;
+    removeConfirmDialog.showModal();
+    confirmRemoveBtn.focus();
+  });
+}
+
+async function removePluginFile(entity, file) {
+  if (!await confirmRemoval(`Remove ${file.label}?`, 'This file will be removed from the plugin source.')) return;
+  try {
+    const data = await apiPost('/api/entities/assets/remove', { id: entity.id, path: file.path });
+    await applyEntityIndex(data.entities);
+    appState.fileEdits.delete(`${entity.id}:${file.path}`);
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
+async function removePlugin() {
+  const entity = currentEntity();
+  if (!entity || !await confirmRemoval(`Remove ${entity.name}?`, 'This removes the plugin source and disables deployed copies. This cannot be undone.')) return;
+  try {
+    const data = await apiPost('/api/entities/remove', { id: entity.id });
+    await applyEntityIndex(data.entities);
+    appState.selectedId = appState.entities[0]?.id || '';
+    appState.fileEdits.clear();
+    appState.contentDirty = false;
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
+async function openSettings() {
+  try {
+    const data = await apiGet('/api/settings');
+    agentsConfigEditor.value = data.content || '';
+    mainView.hidden = true;
+    settingsView.hidden = false;
+    agentsConfigEditor.focus();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
+async function saveSettings() {
+  try {
+    saveSettingsBtn.disabled = true;
+    await apiPost('/api/settings/save', { content: agentsConfigEditor.value });
+    setStatus('Saved deployment settings', 'ok');
+  } catch (error) {
+    setStatus(error.message, 'error');
+  } finally {
+    saveSettingsBtn.disabled = false;
+  }
+}
+
 entitySearch.addEventListener('input', () => {
   appState.query = entitySearch.value;
   renderTree();
 });
 
-entityPreview.addEventListener('input', markDirty);
 document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo textarea').forEach((field) => {
   field.addEventListener('input', markDirty);
   field.addEventListener('change', () => {
@@ -759,6 +886,51 @@ document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo te
 });
 
 saveContentBtn.addEventListener('click', openSaveScopeDialog);
+settingsBtn.addEventListener('click', openSettings);
+closeSettingsBtn.addEventListener('click', () => { settingsView.hidden = true; mainView.hidden = false; });
+saveSettingsBtn.addEventListener('click', saveSettings);
+agentApiBtn.addEventListener('click', () => {
+  agentApiModalEndpoint.value = `${window.location.origin}/api/agent-context`;
+  agentApiDialog.showModal();
+});
+copyAgentApiModalBtn.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(agentApiModalEndpoint.value);
+  copyAgentApiModalBtn.textContent = 'Copied';
+  window.setTimeout(() => { copyAgentApiModalBtn.textContent = 'Copy endpoint'; }, 1200);
+});
+addPluginFileBtn.addEventListener('click', () => {
+  const entity = currentEntity();
+  if (!entity) return;
+  assetForm.reset();
+  assetError.hidden = true;
+  assetDialog.showModal();
+  window.setTimeout(() => assetName.focus(), 0);
+});
+deletePluginBtn.addEventListener('click', removePlugin);
+cancelAssetBtn.addEventListener('click', () => assetDialog.close());
+cancelRemoveBtn.addEventListener('click', () => removeConfirmDialog.close());
+confirmRemoveBtn.addEventListener('click', () => {
+  const resolve = appState.removal;
+  appState.removal = null;
+  removeConfirmDialog.close();
+  if (resolve) resolve(true);
+});
+removeConfirmDialog.addEventListener('close', () => {
+  const resolve = appState.removal;
+  appState.removal = null;
+  if (resolve) resolve(false);
+});
+assetForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  assetError.hidden = true;
+  try {
+    await createPluginFile();
+    assetDialog.close();
+  } catch (error) {
+    assetError.textContent = error.message || 'Could not add plugin file';
+    assetError.hidden = false;
+  }
+});
 saveTargetInputs.forEach((input) => input.addEventListener('change', updateSaveTargetSubmit));
 cancelSaveScopeBtn.addEventListener('click', () => saveScopeDialog.close());
 saveScopeDialog.addEventListener('cancel', (event) => {
@@ -804,16 +976,6 @@ creationForm.addEventListener('submit', async (event) => {
     confirmCreationBtn.disabled = false;
   }
 });
-copyAgentApiBtn.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(`${window.location.origin}/api/agent-context`);
-    copyAgentApiBtn.textContent = 'Copied';
-    window.setTimeout(() => { copyAgentApiBtn.textContent = 'Copy'; }, 1200);
-  } catch (error) {
-    setStatus('Could not copy agent API endpoint', 'error');
-  }
-});
-
 document.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();

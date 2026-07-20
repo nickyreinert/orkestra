@@ -10,7 +10,7 @@
   <main class="shell">
     <aside class="sidebar">
       <div class="sidebarHead">
-        <div class="brand">ORKESTRA</div>
+        <div class="brand"><span>ORKESTRA</span><span class="brandMark" aria-hidden="true">👹</span><button type="button" id="settingsBtn" class="iconButton tooltipTarget" data-tooltip="Open deployment settings" aria-label="Open deployment settings">⚙</button><button type="button" id="agentApiBtn" class="iconButton tooltipTarget" data-tooltip="Open coding-agent API details" aria-label="Open coding-agent API details">ⓘ</button></div>
         <h1>Plugins</h1>
         <input id="entitySearch" class="searchInput" type="search" placeholder="Search plugins">
         <div class="sidebarDomains">
@@ -22,6 +22,7 @@
     </aside>
 
     <section class="workspace">
+      <section id="mainView">
       <section class="controlBand">
         <div class="scopeRow">
           <div>
@@ -40,15 +41,6 @@
             <div id="agentMatrix" class="agentMatrix"></div>
           </div>
         </div>
-
-        <details class="metaApi">
-          <summary>META <span>Agent API and local skill</span></summary>
-          <div class="metaApiBody">
-            <code id="agentApiEndpoint">GET /api/agent-context</code>
-            <button type="button" id="copyAgentApiBtn" class="smallButton tooltipTarget" data-tooltip="Copy the local agent API endpoint">Copy</button>
-            <p>Give this endpoint to a coding agent so it can discover and manage the local plugin catalog.</p>
-          </div>
-        </details>
       </section>
 
       <section class="entityBody">
@@ -72,11 +64,11 @@
             </div>
             <div>
               <dt>Compatibility</dt>
-              <dd><input id="entityAgents" type="text" aria-label="Compatible agents"></dd>
+              <dd><div id="entityAgents" class="checkGroup" aria-label="Compatible agents"></div></dd>
             </div>
             <div>
               <dt>Scopes</dt>
-              <dd><input id="entityScopes" type="text" aria-label="Compatible scopes"></dd>
+              <dd><div id="entityScopes" class="checkGroup" aria-label="Compatible scopes"></div></dd>
             </div>
             <div>
               <dt>Domain</dt>
@@ -92,11 +84,11 @@
             </div>
             <div>
               <dt>Requires</dt>
-              <dd><input id="entityRequires" type="text" aria-label="Required plugins"></dd>
+              <dd><select id="entityRequires" multiple aria-label="Required plugins"></select></dd>
             </div>
             <div>
               <dt>Conflicts</dt>
-              <dd><input id="entityConflicts" type="text" aria-label="Conflicting plugins"></dd>
+              <dd><select id="entityConflicts" multiple aria-label="Conflicting plugins"></select></dd>
             </div>
             <div>
               <dt>Tools</dt>
@@ -117,15 +109,24 @@
           <div class="paneHead">
             <div class="paneTitle">
               <h2>Content</h2>
+              <button type="button" id="addPluginFileBtn" class="miniButton tooltipTarget" data-tooltip="Add a shell, YAML, or Markdown file" aria-label="Add plugin file">+</button>
             </div>
             <div class="previewPaths" aria-label="Entity paths">
               <div><span>Source</span><code id="sourcePathText">-</code></div>
               <div><span>Installed</span><code id="installedPathText">Not installed in current scope</code></div>
             </div>
+            <button type="button" id="deletePluginBtn" class="miniButton dangerButton tooltipTarget" data-tooltip="Remove this plugin" aria-label="Remove plugin">−</button>
           </div>
-          <div id="pluginFileTabs" class="pluginFileTabs" aria-label="Plugin files"></div>
-          <textarea id="entityPreview" class="markdownPreview" spellcheck="false"># Content</textarea>
+          <div id="pluginFilesList" class="pluginFilesList" aria-label="Plugin files"></div>
         </article>
+      </section>
+      </section>
+      <section id="settingsView" class="settingsView" hidden>
+        <div class="settingsHead"><div><div class="eyebrow">Settings</div><h2>Deployment configuration</h2><p>Configure coding agents, hook destinations, and deployment rules for this user.</p></div><button type="button" id="closeSettingsBtn" class="smallButton">Back</button></div>
+        <div class="settingsGrid">
+          <label class="settingsField"><span>Agent deployment rules</span><textarea id="agentsConfigEditor" spellcheck="false"></textarea></label>
+          <aside class="settingsHelp"><h3>Configuration</h3><p>Add an agent under <code>agents</code>, then define its generated files under <code>deployments</code>. Existing Claude, Codex, and Copilot mappings can be changed here.</p><p>Use a project deployment for repository hook files and a global deployment for user-wide files.</p><button type="button" id="saveSettingsBtn" class="smallButton primaryButton">Save settings</button></aside>
+        </div>
       </section>
     </section>
   </main>
@@ -176,6 +177,11 @@
       </div>
     </form>
   </dialog>
+  <dialog id="assetDialog" class="creationDialog" aria-labelledby="assetDialogTitle">
+    <form id="assetForm" method="dialog"><div class="dialogHead"><div><div class="eyebrow">Plugin file</div><h2 id="assetDialogTitle">Add file</h2></div></div><label class="dialogField"><span>File name</span><input id="assetName" type="text" autocomplete="off" placeholder="e.g. validate-contract" required maxlength="80"></label><fieldset class="creationTypes"><legend>File type</legend><label><input type="radio" name="assetType" value="shell" checked> <span><strong>Shell script</strong><small>Deterministic executable under bin/</small></span></label><label><input type="radio" name="assetType" value="yaml"> <span><strong>YAML</strong><small>Configuration file under config/</small></span></label><label><input type="radio" name="assetType" value="markdown"> <span><strong>Markdown</strong><small>Additional plugin documentation</small></span></label></fieldset><p id="assetError" class="dialogError" role="alert" hidden></p><div class="dialogActions"><button type="button" id="cancelAssetBtn" class="smallButton">Cancel</button><button type="submit" class="smallButton primaryButton">Add file</button></div></form>
+  </dialog>
+  <dialog id="agentApiDialog" class="creationDialog" aria-labelledby="agentApiDialogTitle"><form method="dialog"><div class="dialogHead"><div><div class="eyebrow">META</div><h2 id="agentApiDialogTitle">Coding-agent API</h2></div></div><p class="dialogHint">Give a coding agent this local endpoint to inspect the plugin catalog and manage installed plugins through Orkestra.</p><label class="dialogField"><span>Local endpoint</span><input id="agentApiModalEndpoint" type="text" readonly></label><div class="agentApiInstructions"><code>GET /api/agent-context</code><p>The response documents the plugin catalog and supported management endpoints. Configure the agent to use this URL only while the local Orkestra UI is running.</p></div><div class="dialogActions"><button type="button" id="copyAgentApiModalBtn" class="smallButton">Copy endpoint</button><button type="submit" class="smallButton primaryButton">Done</button></div></form></dialog>
+  <dialog id="removeConfirmDialog" class="creationDialog" aria-labelledby="removeConfirmTitle"><form method="dialog"><div class="dialogHead"><div><div class="eyebrow">Confirm removal</div><h2 id="removeConfirmTitle">Remove item?</h2></div></div><p id="removeConfirmText" class="dialogHint"></p><div class="dialogActions"><button type="button" id="cancelRemoveBtn" class="smallButton">Cancel</button><button type="button" id="confirmRemoveBtn" class="smallButton dangerButton">Remove</button></div></form></dialog>
   <script src="/app.js"></script>
 </body>
 </html>

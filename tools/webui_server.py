@@ -359,6 +359,18 @@ def parse_entity_file(path: Path) -> dict | None:
                     "content": config_path.read_text(encoding="utf-8"),
                 }
             )
+        docs_dir = plugin_dir / "docs"
+        if docs_dir.is_dir():
+            for doc_path in sorted(docs_dir.rglob("*.md")):
+                editable_files.append(
+                    {
+                        "path": doc_path.relative_to(ROOT).as_posix(),
+                        "label": doc_path.relative_to(plugin_dir).as_posix(),
+                        "role": "document",
+                        "type": "markdown",
+                        "content": doc_path.read_text(encoding="utf-8"),
+                    }
+                )
     elif data.get("entrypoint"):
         sibling_script = path.parent / str(data.get("entrypoint"))
         if sibling_script.is_file():
@@ -506,6 +518,69 @@ def write_plugin_editable_file(entity_id: str, rel_path: str, content: str) -> N
     target.write_text(content, encoding="utf-8")
     if target.name.endswith(".sh"):
         target.chmod(0o755)
+
+
+def add_plugin_asset(entity_id: str, name: str, asset_type: str) -> dict:
+    source_file = find_entity_source_file(entity_id)
+    if source_file is None or source_file.name != "manifest.yaml":
+        raise ValueError("Additional files require a directory-format plugin")
+    slug = slugify(name)
+    if not slug or asset_type not in {"shell", "yaml", "markdown"}:
+        raise ValueError("Choose a valid file name and type")
+    plugin_dir = source_file.parent
+    if asset_type == "shell":
+        target = plugin_dir / "bin" / f"{slug}.sh"
+        content = "#!/usr/bin/env bash\nset -euo pipefail\n\n# Add deterministic automation here.\n"
+    elif asset_type == "yaml":
+        target = plugin_dir / "config" / f"{slug}.yaml"
+        content = "# Plugin configuration\nkey: value\n"
+    else:
+        target = plugin_dir / "docs" / f"{slug}.md"
+        content = f"# {name.strip()}\n\nDescribe this plugin asset.\n"
+    if target.exists():
+        raise ValueError("A file with this name already exists")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    if asset_type == "shell":
+        target.chmod(0o755)
+    return parse_entity_file(source_file) or {}
+
+
+def remove_plugin_asset(entity_id: str, rel_path: str) -> None:
+    source_file = find_entity_source_file(entity_id)
+    if source_file is None or source_file.name != "manifest.yaml":
+        raise ValueError("Plugin file not found")
+    entity = parse_entity_file(source_file)
+    if entity is None:
+        raise ValueError("Plugin source could not be parsed")
+    removable = {
+        str(item.get("path")) for item in entity.get("editableFiles", [])
+        if item.get("role") in {"script", "config", "document"}
+    }
+    if rel_path not in removable:
+        raise ValueError("This plugin file cannot be removed")
+    target = (ROOT / rel_path).resolve()
+    plugin_root = source_file.parent.resolve()
+    if plugin_root not in target.parents:
+        raise ValueError("Plugin file must stay inside its plugin directory")
+    target.unlink()
+    for parent in (target.parent, target.parent.parent):
+        if parent != plugin_root and parent.exists() and not any(parent.iterdir()):
+            parent.rmdir()
+
+
+def remove_plugin_source(entity_id: str) -> None:
+    source_file = find_entity_source_file(entity_id)
+    if source_file is None:
+        raise ValueError("Plugin not found")
+    if source_file.name == "manifest.yaml":
+        shutil.rmtree(source_file.parent)
+        return
+    entry = parse_entity_file(source_file)
+    sibling = source_file.parent / str(entry.get("entrypoint") or "") if entry else None
+    source_file.unlink()
+    if sibling and sibling.is_file():
+        sibling.unlink()
 
 
 def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
@@ -1796,6 +1871,10 @@ class Handler(BaseHTTPRequestHandler):
             config = load_agents_config()
             return self._send_json(config)
 
+        if path == "/api/settings":
+            content = USER_AGENTS_CONFIG_PATH.read_text(encoding="utf-8") if USER_AGENTS_CONFIG_PATH.exists() else DEFAULT_AGENTS_CONFIG_PATH.read_text(encoding="utf-8")
+            return self._send_json({"path": str(USER_AGENTS_CONFIG_PATH), "content": content})
+
         if path == "/api/deploy-index":
             # Collect everything needed for config-driven deployment UI
             config = load_agents_config()
@@ -1981,6 +2060,43 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json({"error": str(exc)}, status=400)
             return self._send_json({"ok": True, "entity": entity, "entities": collect_entities_index()})
 
+        if parsed.path == "/api/entities/assets/create":
+            data = self._read_json()
+            try:
+                entity = add_plugin_asset(
+                    str(data.get("id") or "").strip(),
+                    str(data.get("name") or "").strip(),
+                    str(data.get("type") or "").strip(),
+                )
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            return self._send_json({"ok": True, "entity": entity, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/assets/remove":
+            data = self._read_json()
+            try:
+                remove_plugin_asset(str(data.get("id") or "").strip(), str(data.get("path") or "").strip())
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/remove":
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            if not safe_name(entity_id):
+                return self._send_json({"error": "Invalid plugin id"}, status=400)
+            source_file = find_entity_source_file(entity_id)
+            if source_file is None:
+                return self._send_json({"error": "Plugin not found"}, status=404)
+            for scope in ("global", "project"):
+                if entity_installed_path(scope, entity_id).exists():
+                    run_orkestra(["disable", entity_id, "--scope", scope])
+            try:
+                remove_plugin_source(entity_id)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
+
         if parsed.path == "/api/entities/move":
             data = self._read_json()
             entity_id = str(data.get("id") or "").strip()
@@ -2017,6 +2133,20 @@ class Handler(BaseHTTPRequestHandler):
             if destination != source_file:
                 source_file.unlink()
             return self._send_json({"ok": True, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/settings/save":
+            data = self._read_json()
+            content = str(data.get("content") or "")
+            if HAS_YAML:
+                try:
+                    parsed_config = yaml.safe_load(content) or {}
+                except Exception as exc:
+                    return self._send_json({"error": f"Invalid YAML: {exc}"}, status=400)
+                if not isinstance(parsed_config, dict):
+                    return self._send_json({"error": "Settings must be a YAML mapping"}, status=400)
+            USER_AGENTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            USER_AGENTS_CONFIG_PATH.write_text(content.rstrip() + "\n", encoding="utf-8")
+            return self._send_json({"ok": True, "path": str(USER_AGENTS_CONFIG_PATH)})
 
         if parsed.path in {"/api/entities/enable", "/api/entities/disable"}:
             data = self._read_json()
