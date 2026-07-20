@@ -150,6 +150,32 @@
       </div>
     </form>
   </dialog>
+  <dialog id="creationDialog" class="creationDialog" aria-labelledby="creationDialogTitle">
+    <form id="creationForm" method="dialog">
+      <div class="dialogHead">
+        <div>
+          <div id="creationDialogEyebrow" class="eyebrow">Plugins</div>
+          <h2 id="creationDialogTitle">Add plugin</h2>
+        </div>
+      </div>
+      <p id="creationDialogHint" class="dialogHint"></p>
+      <label class="dialogField">
+        <span id="creationNameLabel">Name</span>
+        <input id="creationName" type="text" autocomplete="off" required maxlength="80">
+      </label>
+      <fieldset id="creationTypeField" class="creationTypes">
+        <legend>Plugin type</legend>
+        <label><input type="radio" name="pluginType" value="markdown" checked> <span><strong>Markdown</strong><small>Instructions and context</small></span></label>
+        <label><input type="radio" name="pluginType" value="yaml"> <span><strong>YAML</strong><small>Configuration-backed guidance</small></span></label>
+        <label><input type="radio" name="pluginType" value="shell"> <span><strong>Shell script</strong><small>Executable deterministic tool</small></span></label>
+      </fieldset>
+      <p id="creationError" class="dialogError" role="alert" hidden></p>
+      <div class="dialogActions">
+        <button type="button" id="cancelCreationBtn" class="smallButton">Cancel</button>
+        <button type="submit" id="confirmCreationBtn" class="smallButton primaryButton">Create</button>
+      </div>
+    </form>
+  </dialog>
   <script src="/app.js"></script>
 </body>
 </html>

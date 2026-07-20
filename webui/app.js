@@ -15,6 +15,17 @@ const saveScopeForm = document.getElementById('saveScopeForm');
 const cancelSaveScopeBtn = document.getElementById('cancelSaveScopeBtn');
 const confirmSaveScopeBtn = document.getElementById('confirmSaveScopeBtn');
 const saveTargetInputs = Array.from(document.querySelectorAll('.saveTargets input'));
+const creationDialog = document.getElementById('creationDialog');
+const creationForm = document.getElementById('creationForm');
+const creationDialogEyebrow = document.getElementById('creationDialogEyebrow');
+const creationDialogTitle = document.getElementById('creationDialogTitle');
+const creationDialogHint = document.getElementById('creationDialogHint');
+const creationNameLabel = document.getElementById('creationNameLabel');
+const creationName = document.getElementById('creationName');
+const creationTypeField = document.getElementById('creationTypeField');
+const creationError = document.getElementById('creationError');
+const cancelCreationBtn = document.getElementById('cancelCreationBtn');
+const confirmCreationBtn = document.getElementById('confirmCreationBtn');
 
 const entityIdEl = document.getElementById('entityId');
 const entityNameEl = document.getElementById('entityName');
@@ -49,6 +60,7 @@ let appState = {
   fileEdits: new Map(),
   contentDirty: false,
   query: '',
+  creation: null,
 };
 
 function setStatus(message, kind = '') {
@@ -266,33 +278,38 @@ async function applyEntityIndex(data) {
   appState.domains = data.domains || [];
 }
 
-async function createCategory(main) {
-  const label = window.prompt(`New subcategory for ${main.toUpperCase()}`);
-  if (!label?.trim()) return;
-  try {
-    const data = await apiPost('/api/categories/create', { main, label: label.trim() });
-    await applyEntityIndex(data.entities);
-    appState.collapsedCategories.delete(data.category);
-    render();
-  } catch (error) {
-    setStatus(error.message, 'error');
-  }
+function openCreationDialog(mode, target, label) {
+  appState.creation = { mode, target, label };
+  creationForm.reset();
+  creationError.hidden = true;
+  creationError.textContent = '';
+  const isCategory = mode === 'category';
+  creationDialogEyebrow.textContent = isCategory ? 'New subcategory' : 'New plugin';
+  creationDialogTitle.textContent = isCategory ? `Add to ${label}` : `Add plugin to ${label}`;
+  creationDialogHint.textContent = isCategory
+    ? `Create a second-level section under ${label}.`
+    : `Create a plugin in ${label}. You can edit every file immediately after creation.`;
+  creationNameLabel.textContent = isCategory ? 'Subcategory name' : 'Plugin name';
+  creationName.placeholder = isCategory ? 'e.g. review tools' : 'e.g. API contract checker';
+  creationTypeField.hidden = isCategory;
+  confirmCreationBtn.textContent = isCategory ? 'Add section' : 'Create plugin';
+  creationDialog.showModal();
+  window.setTimeout(() => creationName.focus(), 0);
 }
 
-async function createPlugin(category) {
-  const name = window.prompt(`Plugin name for ${category}`);
-  if (!name?.trim()) return;
-  const type = window.prompt('Plugin type: markdown, yaml, or shell', 'markdown');
-  if (!type) return;
-  try {
-    const data = await apiPost('/api/entities/create', { category, name: name.trim(), type: type.trim().toLowerCase() });
-    await applyEntityIndex(data.entities);
-    appState.selectedId = data.entity.id;
-    appState.collapsedCategories.delete(category);
-    render();
-  } catch (error) {
-    setStatus(error.message, 'error');
-  }
+async function createCategory(main, label) {
+  const data = await apiPost('/api/categories/create', { main, label });
+  await applyEntityIndex(data.entities);
+  appState.collapsedCategories.delete(data.category);
+  render();
+}
+
+async function createPlugin(category, name, type) {
+  const data = await apiPost('/api/entities/create', { category, name, type });
+  await applyEntityIndex(data.entities);
+  appState.selectedId = data.entity.id;
+  appState.collapsedCategories.delete(category);
+  render();
 }
 
 async function movePlugin(id, category) {
@@ -326,8 +343,9 @@ function renderTree() {
     const mainSection = document.createElement('section');
     mainSection.className = 'category mainCategory';
 
-    const mainHeader = document.createElement('button');
-    mainHeader.type = 'button';
+    const mainHeader = document.createElement('div');
+    mainHeader.setAttribute('role', 'button');
+    mainHeader.tabIndex = 0;
     mainHeader.className = 'categoryHeader mainCategoryHeader';
     const mainCollapsed = appState.collapsedCategories.has(main.id) && !appState.query.trim();
     const total = main.subcategories.reduce((count, sub) => count + sub.entities.length, 0);
@@ -341,7 +359,8 @@ function renderTree() {
     mainHeader.appendChild(mainChevron);
     mainHeader.appendChild(mainLabel);
     mainHeader.appendChild(mainCount);
-    const addCategory = document.createElement('span');
+    const addCategory = document.createElement('button');
+    addCategory.type = 'button';
     addCategory.className = 'miniButton tooltipTarget categoryAdd';
     addCategory.role = 'button';
     addCategory.tabIndex = 0;
@@ -350,13 +369,18 @@ function renderTree() {
     addCategory.dataset.tooltip = `Add a subcategory to ${main.label}`;
     addCategory.onclick = (event) => {
       event.stopPropagation();
-      createCategory(main.id);
+      openCreationDialog('category', main.id, main.label);
     };
     mainHeader.appendChild(addCategory);
     mainHeader.onclick = () => {
       if (appState.collapsedCategories.has(main.id)) appState.collapsedCategories.delete(main.id);
       else appState.collapsedCategories.add(main.id);
       renderTree();
+    };
+    mainHeader.onkeydown = (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      mainHeader.click();
     };
     mainSection.appendChild(mainHeader);
 
@@ -369,8 +393,9 @@ function renderTree() {
       const section = document.createElement('section');
       section.className = 'subcategory';
 
-      const header = document.createElement('button');
-      header.type = 'button';
+      const header = document.createElement('div');
+      header.setAttribute('role', 'button');
+      header.tabIndex = 0;
       header.className = 'categoryHeader subcategoryHeader';
       const collapsed = appState.collapsedCategories.has(category.id) && !appState.query.trim();
       header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
@@ -387,7 +412,8 @@ function renderTree() {
       header.appendChild(subLabel);
       header.appendChild(subId);
       header.appendChild(count);
-      const addPlugin = document.createElement('span');
+      const addPlugin = document.createElement('button');
+      addPlugin.type = 'button';
       addPlugin.className = 'miniButton tooltipTarget categoryAdd';
       addPlugin.role = 'button';
       addPlugin.tabIndex = 0;
@@ -396,13 +422,18 @@ function renderTree() {
       addPlugin.dataset.tooltip = `Add a plugin to ${category.label}`;
       addPlugin.onclick = (event) => {
         event.stopPropagation();
-        createPlugin(category.id);
+        openCreationDialog('plugin', category.id, category.label);
       };
       header.appendChild(addPlugin);
       header.onclick = () => {
         if (appState.collapsedCategories.has(category.id)) appState.collapsedCategories.delete(category.id);
         else appState.collapsedCategories.add(category.id);
         renderTree();
+      };
+      header.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        header.click();
       };
       section.appendChild(header);
 
@@ -770,6 +801,37 @@ saveScopeForm.addEventListener('submit', async (event) => {
   window.localStorage.setItem('orkestra.saveTargets', JSON.stringify(targets));
   saveScopeDialog.close();
   await saveSelectedContent(targets);
+});
+cancelCreationBtn.addEventListener('click', () => creationDialog.close());
+creationDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  creationDialog.close();
+});
+creationDialog.addEventListener('close', () => {
+  appState.creation = null;
+  creationError.hidden = true;
+});
+creationForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const request = appState.creation;
+  const name = creationName.value.trim();
+  if (!request || !name) return;
+  creationError.hidden = true;
+  confirmCreationBtn.disabled = true;
+  try {
+    if (request.mode === 'category') {
+      await createCategory(request.target, name);
+    } else {
+      const selectedType = creationForm.querySelector('input[name="pluginType"]:checked');
+      await createPlugin(request.target, name, selectedType?.value || 'markdown');
+    }
+    creationDialog.close();
+  } catch (error) {
+    creationError.textContent = error.message || 'Could not create item';
+    creationError.hidden = false;
+  } finally {
+    confirmCreationBtn.disabled = false;
+  }
 });
 copyAgentApiBtn.addEventListener('click', async () => {
   try {
