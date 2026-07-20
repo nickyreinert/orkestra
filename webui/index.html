@@ -84,7 +84,10 @@
         <article class="previewPane">
           <div class="paneHead">
             <h2>Preview</h2>
-            <span id="statusText" class="statusText"></span>
+            <div class="previewPaths" aria-label="Entity paths">
+              <div><span>Source</span><code id="sourcePathText">-</code></div>
+              <div><span>Installed</span><code id="installedPathText">Not installed in current scope</code></div>
+            </div>
           </div>
           <pre id="entityPreview" class="markdownPreview"># Preview</pre>
         </article>

@@ -524,17 +524,49 @@ input {
   text-transform: uppercase;
 }
 
-.statusText {
+.previewPaths {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  justify-items: end;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.statusText.error {
-  color: var(--danger);
+.previewPaths div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  width: min(620px, 54vw);
 }
 
-.statusText.ok {
+.previewPaths span {
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.previewPaths code,
+.pathValue {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pathValue.ok {
   color: var(--success);
+}
+
+.pathValue.error {
+  color: var(--danger);
 }
 
 .markdownPreview {

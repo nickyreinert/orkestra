@@ -2,7 +2,8 @@ const projectInput = document.getElementById('projectInput');
 const entitySearch = document.getElementById('entitySearch');
 const entityTree = document.getElementById('entityTree');
 const agentMatrix = document.getElementById('agentMatrix');
-const statusText = document.getElementById('statusText');
+const sourcePathText = document.getElementById('sourcePathText');
+const installedPathText = document.getElementById('installedPathText');
 const commandBtn = document.getElementById('commandBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const helpBtn = document.getElementById('helpBtn');
@@ -32,8 +33,8 @@ let appState = {
 };
 
 function setStatus(message, kind = '') {
-  statusText.textContent = message || '';
-  statusText.className = 'statusText' + (kind ? ` ${kind}` : '');
+  installedPathText.textContent = message || 'Not installed in current scope';
+  installedPathText.className = 'pathValue' + (kind ? ` ${kind}` : '');
 }
 
 async function apiGet(path) {
@@ -339,6 +340,9 @@ function renderDetails() {
     entityNameEl.textContent = 'No entity selected';
     entityDescriptionEl.textContent = 'Choose an entity from the sidebar.';
     entityPreview.textContent = '# Preview';
+    sourcePathText.textContent = '-';
+    installedPathText.textContent = 'Not installed in current scope';
+    installedPathText.className = 'pathValue';
     return;
   }
 
@@ -352,8 +356,11 @@ function renderDetails() {
   entityConflictsEl.textContent = formatList(entity.conflictsWith);
   entityTagsEl.textContent = formatList(entity.tags);
   entityPreview.textContent = entity.content || '# Empty entity';
-  statusText.textContent = entity.path || '';
-  statusText.className = 'statusText';
+  sourcePathText.textContent = entity.path || '-';
+  installedPathText.textContent = isInstalled(entity)
+    ? entity.installPaths?.[appState.scope] || '-'
+    : 'Not installed in current scope';
+  installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
 }
 
 function render() {

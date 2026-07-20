@@ -303,7 +303,13 @@ def collect_entities_index() -> dict:
                 "project": entity_installed_path("project", entity["id"]).exists(),
                 "global": entity_installed_path("global", entity["id"]).exists(),
             }
+            project_install_path = entity_installed_path("project", entity["id"])
+            install_paths = {
+                "project": str(project_install_path.relative_to(PROJECT_DIR)),
+                "global": str(entity_installed_path("global", entity["id"])),
+            }
             entity["installed"] = installed
+            entity["installPaths"] = install_paths
             entities.append(entity)
 
     categories: dict[str, list[dict]] = {}
