@@ -585,15 +585,57 @@ def entity_scope_dir(scope: str) -> Path:
     return PROJECT_DIR / ".orkestra"
 
 
-def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
-    destination = entity_installed_path(scope, entity["id"])
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def rendered_plugin_content(entity: dict, source_file: Path) -> str:
     source_rel = source_file.relative_to(ROOT).as_posix()
     content = str(entity.get("content") or "").rstrip()
     lines = [f"<!-- orkestra:entity id={entity['id']} source={source_rel} -->", content]
     if entity.get("type") == "shell" and entity.get("entrypoint"):
         lines.extend(["", f"Tool: `bin/{entity['entrypoint']}`"])
-    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def scope_plugin_is_modified(scope: str, entity: dict, source_file: Path) -> bool:
+    destination = entity_installed_path(scope, entity["id"])
+    if not destination.exists():
+        return False
+    try:
+        if destination.read_text(encoding="utf-8") != rendered_plugin_content(entity, source_file):
+            return True
+    except OSError:
+        return True
+
+    source_plugin_dir = source_file.parent if source_file.name == "manifest.yaml" else None
+    if source_plugin_dir:
+        scripts_dir = source_plugin_dir / "bin"
+        scripts = sorted(scripts_dir.glob("*.sh")) if scripts_dir.is_dir() else []
+        for script_source in scripts:
+            deployed = entity_scope_dir(scope) / "bin" / script_source.name
+            if not deployed.exists() or deployed.read_text(encoding="utf-8") != script_source.read_text(encoding="utf-8"):
+                return True
+        config_sources = [source_plugin_dir / name for name in ("config.json", "config.yaml", "config.yml")]
+        configs_dir = source_plugin_dir / "config"
+        if configs_dir.is_dir():
+            config_sources.extend(item for item in sorted(configs_dir.rglob("*")) if item.is_file())
+        for config_source in config_sources:
+            if not config_source.is_file():
+                continue
+            rel_config = config_source.relative_to(source_plugin_dir)
+            deployed = entity_scope_dir(scope) / "config" / source_plugin_dir.name / rel_config
+            if not deployed.exists() or deployed.read_text(encoding="utf-8") != config_source.read_text(encoding="utf-8"):
+                return True
+    elif entity.get("type") == "shell" and entity.get("entrypoint"):
+        script_source = source_file.parent / str(entity["entrypoint"])
+        deployed = entity_scope_dir(scope) / "bin" / str(entity["entrypoint"])
+        expected = script_source.read_text(encoding="utf-8") if script_source.is_file() else str(entity.get("content") or "")
+        if not deployed.exists() or deployed.read_text(encoding="utf-8") != expected:
+            return True
+    return False
+
+
+def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
+    destination = entity_installed_path(scope, entity["id"])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(rendered_plugin_content(entity, source_file), encoding="utf-8")
     source_plugin_dir = source_file.parent if source_file.name == "manifest.yaml" else None
     if source_plugin_dir:
         bin_dir = source_plugin_dir / "bin"
@@ -649,6 +691,7 @@ def write_installed_plugin_asset(scope: str, entity: dict, source_file: Path, re
 def collect_entities_index() -> dict:
     source_dir = ROOT / "content" / "source"
     entities: list[dict] = []
+    scope_changes = {"project": False, "global": False}
     if source_dir.exists():
         for path in sorted(source_dir.rglob("*.y*ml")):
             entity = parse_entity_file(path)
@@ -668,6 +711,13 @@ def collect_entities_index() -> dict:
                 "global": str(entity_scope_dir("global")),
             }
             entity["installed"] = installed
+            entity["modified"] = {
+                scope: scope_plugin_is_modified(scope, entity, path)
+                for scope, is_installed in installed.items()
+                if is_installed
+            }
+            for scope in scope_changes:
+                scope_changes[scope] = scope_changes[scope] or bool(entity["modified"].get(scope))
             entity["installPaths"] = install_paths
             entity["installRoots"] = install_roots
             entities.append(entity)
@@ -729,6 +779,7 @@ def collect_entities_index() -> dict:
             }
             for domain, meta in DOMAIN_META.items()
         ],
+        "scopeChanges": scope_changes,
         "agents": list_agents(),
         "project": {
             "path": str(PROJECT_DIR),

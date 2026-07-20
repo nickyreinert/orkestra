@@ -257,7 +257,7 @@ textarea {
   width: 100%;
   min-height: 42px;
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 24px 24px;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   border: 1px solid transparent;
@@ -266,7 +266,6 @@ textarea {
   color: var(--text);
   background: transparent;
   text-align: left;
-  cursor: pointer;
 }
 
 .domainIndicator {
@@ -313,6 +312,18 @@ textarea {
   overflow: hidden;
   display: grid;
   gap: 2px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entityLabel:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 .entityLabel strong,
@@ -352,13 +363,42 @@ textarea {
   border-color: var(--accent);
 }
 
-.entityRow.installed .miniButton:first-of-type {
-  color: var(--danger);
+.scopeToggles {
+  display: flex;
+  gap: 4px;
 }
 
-.entityRow.installed .miniButton:first-of-type:hover {
-  border-color: var(--danger);
-  color: var(--danger);
+.scopeToggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scopeToggle:hover,
+.scopeToggle:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.scopeToggle.active {
+  border-color: var(--accent);
+  color: #06110f;
+  background: var(--accent);
+}
+
+.scopeToggle.active.modified {
+  border-color: #f59e0b;
+  color: #1b1100;
+  background: #f59e0b;
 }
 
 .workspace {
@@ -419,6 +459,19 @@ textarea {
   border-color: var(--accent);
   color: #06110f;
   background: var(--accent);
+}
+
+.scopeChangeDot {
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px #111;
+}
+
+.segment.hasChanges:not(.active) {
+  border-color: rgba(245, 158, 11, 0.55);
 }
 
 .projectSelector {

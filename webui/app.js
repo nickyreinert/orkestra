@@ -50,6 +50,7 @@ let appState = {
   categories: [],
   categoryTree: [],
   domains: [],
+  scopeChanges: { global: false, project: false },
   activeDomains: new Set(['guidance', 'enforcement', 'automation']),
   agents: [],
   selectedAgents: new Set(),
@@ -221,6 +222,13 @@ function selectEntity(id) {
 function renderScopeControls() {
   document.querySelectorAll('.segment').forEach((button) => {
     button.classList.toggle('active', button.dataset.scope === appState.scope);
+    const modified = Boolean(appState.scopeChanges[button.dataset.scope]);
+    button.classList.toggle('hasChanges', modified);
+    const dot = button.querySelector('.scopeChangeDot');
+    if (dot) dot.hidden = !modified;
+    button.setAttribute('aria-label', modified
+      ? `${button.textContent.trim()} scope has deployed changes`
+      : `${button.textContent.trim()} scope`);
     button.onclick = () => {
       appState.scope = button.dataset.scope;
       render();
@@ -276,6 +284,7 @@ async function applyEntityIndex(data) {
   appState.categories = data.categories || [];
   appState.categoryTree = data.categoryTree || [];
   appState.domains = data.domains || [];
+  appState.scopeChanges = data.scopeChanges || { global: false, project: false };
 }
 
 function openCreationDialog(mode, target, label) {
@@ -456,27 +465,25 @@ function renderTree() {
       });
 
       category.entities.forEach((entity) => {
-        const installed = isInstalled(entity);
-        const row = document.createElement('button');
-        row.type = 'button';
+        const row = document.createElement('div');
         row.className = `entityRow ${entity.domain || 'guidance'}`;
         row.classList.toggle('active', selected && selected.id === entity.id);
-        row.classList.toggle('installed', installed);
+        row.classList.toggle('installed', Boolean(entity.installed?.global || entity.installed?.project));
         row.classList.toggle('blocked', isBlocked(entity));
-        row.setAttribute('aria-label', `Select plugin ${entity.id}`);
         row.draggable = true;
         row.addEventListener('dragstart', (event) => {
           event.dataTransfer.effectAllowed = 'move';
           event.dataTransfer.setData('text/orkestra-plugin', entity.id);
         });
-        row.onclick = () => selectEntity(entity.id);
-
         const indicator = document.createElement('span');
         indicator.className = 'domainIndicator';
         indicator.textContent = domainIndicator(entity.domain);
 
-        const label = document.createElement('span');
+        const label = document.createElement('button');
+        label.type = 'button';
         label.className = 'entityLabel';
+        label.setAttribute('aria-label', `Preview plugin ${entity.id}`);
+        label.onclick = () => selectEntity(entity.id);
         const name = document.createElement('strong');
         name.textContent = entity.name || entity.id;
         const meta = document.createElement('small');
@@ -484,60 +491,29 @@ function renderTree() {
         label.appendChild(name);
         label.appendChild(meta);
 
-        const install = document.createElement('span');
-        install.className = 'miniButton tooltipTarget tooltipLeft';
-        install.role = 'button';
-        install.tabIndex = 0;
-        install.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} plugin ${entity.id}`);
-        install.dataset.tooltip = installed
-          ? `Remove plugin ${entity.id} from ${appState.scope} scope`
-          : `Install plugin ${entity.id} into ${appState.scope} scope`;
-        install.textContent = installed ? '-' : '+';
-        install.onclick = (event) => {
-          event.stopPropagation();
-          selectEntity(entity.id);
-          if (appState.selectedId !== entity.id) return;
-          if (installed) disableSelected();
-          else installSelected();
-        };
-        install.onkeydown = (event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          event.stopPropagation();
-          selectEntity(entity.id);
-          if (appState.selectedId !== entity.id) return;
-          if (installed) disableSelected();
-          else installSelected();
-        };
-
-        const open = document.createElement('span');
-        open.className = 'miniButton tooltipTarget tooltipLeft';
-        open.role = 'button';
-        open.tabIndex = 0;
-        open.setAttribute('aria-label', `Show source path for plugin ${entity.id}`);
-        open.dataset.tooltip = `Show source path: ${entity.path}`;
-        open.textContent = '↗';
-        open.onclick = (event) => {
-          event.stopPropagation();
-          selectEntity(entity.id);
-          if (appState.selectedId !== entity.id) return;
-          render();
-          setStatus(entity.path);
-        };
-        open.onkeydown = (event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          event.stopPropagation();
-          selectEntity(entity.id);
-          if (appState.selectedId !== entity.id) return;
-          render();
-          setStatus(entity.path);
-        };
+        const scopeToggles = document.createElement('div');
+        scopeToggles.className = 'scopeToggles';
+        [['global', 'U', 'User'], ['project', 'P', 'Project']].forEach(([scope, text, labelText]) => {
+          const installed = Boolean(entity.installed?.[scope]);
+          const modified = Boolean(entity.modified?.[scope]);
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'scopeToggle tooltipTarget tooltipLeft';
+          toggle.classList.toggle('active', installed);
+          toggle.classList.toggle('modified', modified);
+          toggle.setAttribute('aria-pressed', installed ? 'true' : 'false');
+          toggle.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id} ${installed ? 'from' : 'in'} ${labelText} scope`);
+          toggle.dataset.tooltip = installed
+            ? `Remove from ${labelText} scope${modified ? ' (local changes detected)' : ''}`
+            : `Install in ${labelText} scope`;
+          toggle.textContent = text;
+          toggle.onclick = () => toggleEntityScope(entity, scope);
+          scopeToggles.appendChild(toggle);
+        });
 
         row.appendChild(indicator);
         row.appendChild(label);
-        row.appendChild(install);
-        row.appendChild(open);
+        row.appendChild(scopeToggles);
         section.appendChild(row);
       });
 
@@ -645,6 +621,7 @@ async function refresh() {
   appState.categories = data.categories || [];
   appState.categoryTree = data.categoryTree || [];
   appState.domains = data.domains || [];
+  appState.scopeChanges = data.scopeChanges || { global: false, project: false };
   appState.agents = data.agents || [];
   if (appState.agents.length === 0) appState.agents = ['codex'];
   appState.agents.forEach((agent) => appState.selectedAgents.add(agent));
@@ -661,39 +638,33 @@ async function refresh() {
   render();
 }
 
-async function installSelected() {
-  const entity = currentEntity();
+async function setEntityScope(entity, scope, enabled) {
   if (!entity) return;
   try {
-    setStatus(`Installing ${entity.id} ...`);
-    const data = await apiPost('/api/entities/enable', {
+    setStatus(`${enabled ? 'Installing' : 'Removing'} ${entity.id} ...`);
+    const data = await apiPost(`/api/entities/${enabled ? 'enable' : 'disable'}`, {
       id: entity.id,
-      scope: appState.scope,
-      agents: Array.from(appState.selectedAgents),
+      scope,
+      ...(enabled ? { agents: Array.from(appState.selectedAgents) } : {}),
     });
     await applyEntityIndex(data.entities);
-    setStatus(`Installed ${entity.id}`, 'ok');
+    setStatus(`${enabled ? 'Installed' : 'Removed'} ${entity.id} in ${scope === 'global' ? 'user' : 'project'} scope`, 'ok');
     render();
   } catch (error) {
     setStatus(error.message, 'error');
   }
 }
 
+function toggleEntityScope(entity, scope) {
+  return setEntityScope(entity, scope, !Boolean(entity.installed?.[scope]));
+}
+
+function installSelected() {
+  return setEntityScope(currentEntity(), appState.scope, true);
+}
+
 async function disableSelected() {
-  const entity = currentEntity();
-  if (!entity) return;
-  try {
-    setStatus(`Disabling ${entity.id} ...`);
-    const data = await apiPost('/api/entities/disable', {
-      id: entity.id,
-      scope: appState.scope,
-    });
-    await applyEntityIndex(data.entities);
-    setStatus(`Disabled ${entity.id}`, 'ok');
-    render();
-  } catch (error) {
-    setStatus(error.message, 'error');
-  }
+  return setEntityScope(currentEntity(), appState.scope, false);
 }
 
 function rememberedSaveTargets() {
