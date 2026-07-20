@@ -61,7 +61,7 @@
               <h2 id="entityName">No plugin selected</h2>
             </div>
           </div>
-          <p id="entityDescription" class="description">Choose a plugin from the sidebar.</p>
+          <textarea id="entityDescription" class="description descriptionInput" spellcheck="true">Choose a plugin from the sidebar.</textarea>
           <dl class="metaGrid">
             <div>
               <dt>Version</dt>
@@ -96,13 +96,16 @@
 
         <article class="previewPane">
           <div class="paneHead">
-            <h2>Preview</h2>
+            <div class="paneTitle">
+              <h2>Content</h2>
+              <button type="button" id="saveContentBtn" class="smallButton tooltipTarget" data-tooltip="Save plugin content to the source YAML">Save</button>
+            </div>
             <div class="previewPaths" aria-label="Entity paths">
               <div><span>Source</span><code id="sourcePathText">-</code></div>
               <div><span>Installed</span><code id="installedPathText">Not installed in current scope</code></div>
             </div>
           </div>
-          <pre id="entityPreview" class="markdownPreview"># Preview</pre>
+          <textarea id="entityPreview" class="markdownPreview" spellcheck="false"># Content</textarea>
         </article>
       </section>
     </section>

@@ -313,6 +313,44 @@ def parse_entity_file(path: Path) -> dict | None:
     }
 
 
+def find_entity_source_file(entity_id: str) -> Path | None:
+    source_dir = ROOT / "content" / "source"
+    if not source_dir.exists():
+        return None
+    for path in sorted(source_dir.rglob("*.y*ml")):
+        entity = parse_entity_file(path)
+        if entity and entity.get("id") == entity_id:
+            return path
+    return None
+
+
+def replace_yaml_block(raw: str, key: str, value: str) -> str:
+    lines = raw.splitlines()
+    start = None
+    for idx, line in enumerate(lines):
+        if re.fullmatch(rf"{re.escape(key)}\s*:\s*[|>]?.*", line):
+            start = idx
+            break
+
+    block = [f"{key}: |"]
+    block.extend(f"  {line}" if line else "" for line in value.splitlines())
+
+    if start is None:
+        prefix = raw.rstrip("\n")
+        suffix = "\n" if prefix else ""
+        return f"{prefix}{suffix}{chr(10).join(block)}\n"
+
+    end = start + 1
+    while end < len(lines):
+        line = lines[end]
+        if line and not line.startswith((" ", "\t")):
+            break
+        end += 1
+
+    updated = lines[:start] + block + lines[end:]
+    return "\n".join(updated).rstrip("\n") + "\n"
+
+
 def entity_installed_path(scope: str, entity_id: str) -> Path:
     rel = Path(*entity_id.split(".")).with_suffix(".md")
     if scope == "global":
@@ -1454,6 +1492,26 @@ class Handler(BaseHTTPRequestHandler):
             candidate.parent.mkdir(parents=True, exist_ok=True)
             candidate.write_text(content, encoding="utf-8")
             return self._send_json({"ok": True, "path": rel})
+
+        if parsed.path == "/api/entities/save-content":
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            description = str(data.get("description") or "")
+            content = str(data.get("content") or "")
+
+            if not entity_id:
+                return self._send_json({"error": "Missing entity id"}, status=400)
+            if not safe_name(entity_id):
+                return self._send_json({"error": "Invalid entity id"}, status=400)
+
+            source_file = find_entity_source_file(entity_id)
+            if source_file is None:
+                return self._send_json({"error": "Plugin not found"}, status=404)
+
+            raw = source_file.read_text(encoding="utf-8")
+            raw = replace_yaml_block(raw, "description", description)
+            source_file.write_text(replace_yaml_block(raw, "content", content), encoding="utf-8")
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
 
         if parsed.path in {"/api/entities/enable", "/api/entities/disable"}:
             data = self._read_json()

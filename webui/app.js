@@ -10,6 +10,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 const helpBtn = document.getElementById('helpBtn');
 const topbarPopover = document.getElementById('topbarPopover');
 const floatingTooltip = document.getElementById('floatingTooltip');
+const saveContentBtn = document.getElementById('saveContentBtn');
 
 const entityIdEl = document.getElementById('entityId');
 const entityNameEl = document.getElementById('entityName');
@@ -34,6 +35,8 @@ let appState = {
   selectedAgents: new Set(),
   collapsedCategories: new Set(),
   selectedId: '',
+  editingContentId: '',
+  contentDirty: false,
   query: '',
   activePopover: '',
 };
@@ -113,6 +116,15 @@ function selectedAgentList() {
   return Array.from(appState.selectedAgents);
 }
 
+function selectEntity(id) {
+  if (id === appState.selectedId) return;
+  if (appState.contentDirty && !window.confirm('Discard unsaved plugin edits?')) return;
+  appState.contentDirty = false;
+  appState.editingContentId = '';
+  appState.selectedId = id;
+  render();
+}
+
 function closePopover() {
   appState.activePopover = '';
   topbarPopover.hidden = true;
@@ -154,8 +166,7 @@ function openPopover(kind, anchor) {
         render();
       }],
       ['Select first plugin', () => {
-        if (appState.entities[0]) appState.selectedId = appState.entities[0].id;
-        render();
+        if (appState.entities[0]) selectEntity(appState.entities[0].id);
       }],
     ].forEach(([label, action]) => {
       const button = document.createElement('button');
@@ -344,10 +355,7 @@ function renderTree() {
         row.classList.toggle('installed', installed);
         row.classList.toggle('blocked', isBlocked(entity));
         row.setAttribute('aria-label', `Select plugin ${entity.id}`);
-        row.onclick = () => {
-          appState.selectedId = entity.id;
-          render();
-        };
+        row.onclick = () => selectEntity(entity.id);
 
         const indicator = document.createElement('span');
         indicator.className = 'domainIndicator';
@@ -373,7 +381,8 @@ function renderTree() {
         install.textContent = installed ? '-' : '+';
         install.onclick = (event) => {
           event.stopPropagation();
-          appState.selectedId = entity.id;
+          selectEntity(entity.id);
+          if (appState.selectedId !== entity.id) return;
           if (installed) disableSelected();
           else installSelected();
         };
@@ -381,7 +390,8 @@ function renderTree() {
           if (event.key !== 'Enter' && event.key !== ' ') return;
           event.preventDefault();
           event.stopPropagation();
-          appState.selectedId = entity.id;
+          selectEntity(entity.id);
+          if (appState.selectedId !== entity.id) return;
           if (installed) disableSelected();
           else installSelected();
         };
@@ -395,7 +405,8 @@ function renderTree() {
         open.textContent = '↗';
         open.onclick = (event) => {
           event.stopPropagation();
-          appState.selectedId = entity.id;
+          selectEntity(entity.id);
+          if (appState.selectedId !== entity.id) return;
           render();
           setStatus(entity.path);
         };
@@ -403,7 +414,8 @@ function renderTree() {
           if (event.key !== 'Enter' && event.key !== ' ') return;
           event.preventDefault();
           event.stopPropagation();
-          appState.selectedId = entity.id;
+          selectEntity(entity.id);
+          if (appState.selectedId !== entity.id) return;
           render();
           setStatus(entity.path);
         };
@@ -428,8 +440,11 @@ function renderDetails() {
   if (!entity) {
     entityIdEl.textContent = 'Select a plugin';
     entityNameEl.textContent = 'No plugin selected';
-    entityDescriptionEl.textContent = 'Choose a plugin from the sidebar.';
-    entityPreview.textContent = '# Preview';
+    entityDescriptionEl.value = 'Choose a plugin from the sidebar.';
+    entityDescriptionEl.disabled = true;
+    entityPreview.value = '# Content';
+    entityPreview.disabled = true;
+    saveContentBtn.disabled = true;
     sourcePathText.textContent = '-';
     installedPathText.textContent = 'Not installed in current scope';
     installedPathText.className = 'pathValue';
@@ -439,7 +454,7 @@ function renderDetails() {
   appState.selectedId = entity.id;
   entityIdEl.textContent = `${entity.id}${entity.version ? `  v${entity.version}` : ''}`;
   entityNameEl.textContent = entity.name;
-  entityDescriptionEl.textContent = entity.description || 'No description.';
+  entityDescriptionEl.disabled = false;
   entityVersionEl.textContent = entity.version || '-';
   entityAuthorEl.textContent = entity.author || '-';
   entityAgentsEl.textContent = formatList(entity.agents);
@@ -449,7 +464,15 @@ function renderDetails() {
     : entity.type || '-';
   entityConflictsEl.textContent = formatList(entity.conflictsWith);
   entityTagsEl.textContent = formatList(entity.tags);
-  entityPreview.textContent = entity.content || '# Empty entity';
+  entityPreview.disabled = false;
+  saveContentBtn.disabled = !appState.contentDirty || appState.editingContentId !== entity.id;
+  if (appState.editingContentId !== entity.id || !appState.contentDirty) {
+    entityDescriptionEl.value = entity.description || '';
+    entityPreview.value = entity.content || '';
+    appState.editingContentId = entity.id;
+    appState.contentDirty = false;
+    saveContentBtn.disabled = true;
+  }
   sourcePathText.textContent = entity.path || '-';
   installedPathText.textContent = isInstalled(entity)
     ? entity.installPaths?.[appState.scope] || '-'
@@ -495,6 +518,8 @@ async function installSelected() {
     });
     appState.entities = data.entities.entities || [];
     appState.categories = data.entities.categories || [];
+    appState.categoryTree = data.entities.categoryTree || [];
+    appState.domains = data.entities.domains || [];
     setStatus(`Installed ${entity.id}`, 'ok');
     render();
   } catch (error) {
@@ -513,6 +538,8 @@ async function disableSelected() {
     });
     appState.entities = data.entities.entities || [];
     appState.categories = data.entities.categories || [];
+    appState.categoryTree = data.entities.categoryTree || [];
+    appState.domains = data.entities.domains || [];
     setStatus(`Disabled ${entity.id}`, 'ok');
     render();
   } catch (error) {
@@ -520,10 +547,51 @@ async function disableSelected() {
   }
 }
 
+async function saveSelectedContent() {
+  const entity = currentEntity();
+  if (!entity) return;
+  try {
+    saveContentBtn.disabled = true;
+    setStatus(`Saving ${entity.id} content ...`);
+    const data = await apiPost('/api/entities/save-content', {
+      id: entity.id,
+      description: entityDescriptionEl.value,
+      content: entityPreview.value,
+    });
+    appState.entities = data.entities.entities || [];
+    appState.categories = data.entities.categories || [];
+    appState.categoryTree = data.entities.categoryTree || [];
+    appState.domains = data.entities.domains || [];
+    appState.contentDirty = false;
+    appState.editingContentId = entity.id;
+    setStatus(`Saved source content for ${entity.id}`, 'ok');
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+    saveContentBtn.disabled = false;
+  }
+}
+
 entitySearch.addEventListener('input', () => {
   appState.query = entitySearch.value;
   renderTree();
 });
+
+entityPreview.addEventListener('input', () => {
+  const entity = currentEntity();
+  appState.editingContentId = entity?.id || '';
+  appState.contentDirty = true;
+  saveContentBtn.disabled = false;
+});
+
+entityDescriptionEl.addEventListener('input', () => {
+  const entity = currentEntity();
+  appState.editingContentId = entity?.id || '';
+  appState.contentDirty = true;
+  saveContentBtn.disabled = false;
+});
+
+saveContentBtn.addEventListener('click', saveSelectedContent);
 
 commandBtn.addEventListener('click', () => openPopover('commands', commandBtn));
 settingsBtn.addEventListener('click', () => openPopover('settings', settingsBtn));
