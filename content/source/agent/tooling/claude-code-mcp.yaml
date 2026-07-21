@@ -1,5 +1,5 @@
 id: agent.tooling.claude-code-mcp
-name: Claude Code MCP
+name: Agent MCP Integrations
 category: agent.tooling
 domain: guidance
 type: markdown
@@ -7,19 +7,19 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  MCP setup and operating guidance for Claude Code.
+  MCP setup and operating guidance for coding agents.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [global, project]
 conflicts_with: []
 requires: []
-tags: [claude-code, mcp, tools]
+tags: [agents, mcp, tools]
 content: |
-  # Claude Code MCP
+  # Agent MCP Integrations
 
-  - Use standard Claude MCP config for external tools.
+  - Use the active agent's standard MCP configuration for external tools.
   - Common servers include GitHub, Sentry, Postgres, and Obsidian.
   - Configure per project for project-level integration definitions.
-  - Check active MCP servers with `/mcp`.
+  - Check the agent's active MCP server list before relying on an integration.
   - Install only the MCPs that are needed; too many tools increase context cost.
   - Treat MCP definitions as loaded context.

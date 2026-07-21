@@ -1,6 +1,6 @@
 id: enforcement.policies.orkestra-meta
 name: Orkestra Generated File Contract
-category: enforcement.policies
+category: meta
 domain: guidance
 type: markdown
 executable: false

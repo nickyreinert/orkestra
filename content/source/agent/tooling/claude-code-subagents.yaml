@@ -1,5 +1,5 @@
 id: agent.tooling.claude-code-subagents
-name: Claude Code Subagents
+name: Agent Delegation
 category: agent.tooling
 domain: guidance
 type: markdown
@@ -7,19 +7,19 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Guidance for isolated Claude Code subagents.
+  Guidance for delegating bounded work to isolated coding agents.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [global, project]
 conflicts_with: []
 requires: []
-tags: [claude-code, subagents, review]
+tags: [agents, subagents, review]
 content: |
-  # Claude Code Subagents
+  # Agent Delegation
 
-  - Store subagents under `.claude/agents/<agent>.md`.
+  - Store reusable subagent definitions where the active agent expects them.
   - Use subagents for complex tasks that should keep the main session clean.
-  - Define `name`, `description`, `tools`, and `model` in frontmatter.
+  - Define the role, task boundary, tools, and expected output explicitly.
   - Read-only tools are useful for review agents.
   - Chain agents for multi-stage tasks when needed.
   - Use Git worktrees for isolation.

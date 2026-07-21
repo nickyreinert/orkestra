@@ -1,6 +1,6 @@
 id: agent.tooling.orkestra-agent-interface
 name: Orkestra Agent Interface
-category: agent.tooling
+category: meta
 domain: guidance
 type: markdown
 executable: false

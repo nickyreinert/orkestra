@@ -405,19 +405,73 @@ async function movePlugin(id, category) {
   }
 }
 
+function createEntityRow(entity, selected) {
+  const row = document.createElement('div');
+  row.className = `entityRow ${entity.domain || 'guidance'}`;
+  row.classList.toggle('active', selected && selected.id === entity.id);
+  row.classList.toggle('installed', Boolean(entity.installed?.global || entity.installed?.project));
+  row.classList.toggle('blocked', isBlocked(entity));
+  row.draggable = true;
+  row.addEventListener('dragstart', (event) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/orkestra-plugin', entity.id);
+  });
+  const indicator = document.createElement('span');
+  indicator.className = 'domainIndicator';
+  indicator.textContent = domainIndicator(entity.domain);
+
+  const entityLabel = document.createElement('button');
+  entityLabel.type = 'button';
+  entityLabel.className = 'entityLabel';
+  entityLabel.setAttribute('aria-label', `Preview plugin ${entity.id}`);
+  entityLabel.onclick = () => selectEntity(entity.id);
+  const name = document.createElement('strong');
+  name.textContent = entity.name || entity.id;
+  const meta = document.createElement('small');
+  meta.textContent = entity.id;
+  entityLabel.appendChild(name);
+  entityLabel.appendChild(meta);
+
+  const scopeToggles = document.createElement('div');
+  scopeToggles.className = 'scopeToggles';
+  [['global', 'U', 'User'], ['project', 'P', 'Project']].forEach(([scope, text, labelText]) => {
+    const installed = Boolean(entity.installed?.[scope]);
+    const modified = Boolean(entity.modified?.[scope]);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'scopeToggle tooltipTarget tooltipLeft';
+    toggle.classList.toggle('active', installed);
+    toggle.classList.toggle('modified', modified);
+    toggle.setAttribute('aria-pressed', installed ? 'true' : 'false');
+    toggle.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id} ${installed ? 'from' : 'in'} ${labelText} scope`);
+    toggle.dataset.tooltip = installed
+      ? `Remove from ${labelText} scope${modified ? ' (local changes detected)' : ''}`
+      : `Install in ${labelText} scope`;
+    toggle.textContent = text;
+    toggle.onclick = () => toggleEntityScope(entity, scope);
+    scopeToggles.appendChild(toggle);
+  });
+
+  row.appendChild(indicator);
+  row.appendChild(entityLabel);
+  row.appendChild(scopeToggles);
+  return row;
+}
+
 function renderTree() {
   entityTree.innerHTML = '';
   const selected = currentEntity();
   const tree = appState.categoryTree
     .map((main) => ({
       ...main,
+      entities: main.entities.filter((entity) => matchesQuery(entity) && matchesDomain(entity)),
       subcategories: main.subcategories
         .map((sub) => ({
           ...sub,
           entities: sub.entities.filter((entity) => matchesQuery(entity) && matchesDomain(entity)),
         })),
     }))
-    .filter((main) => main.subcategories.length > 0);
+    .filter((main) => main.entities.length > 0 || main.subcategories.some((sub) => sub.entities.length > 0));
 
   tree.forEach((main) => {
     const mainSection = document.createElement('section');
@@ -428,7 +482,7 @@ function renderTree() {
     mainHeader.tabIndex = 0;
     mainHeader.className = 'categoryHeader mainCategoryHeader';
     const mainCollapsed = appState.collapsedCategories.has(main.id) && !appState.query.trim();
-    const total = main.subcategories.reduce((count, sub) => count + sub.entities.length, 0);
+    const total = main.entities.length + main.subcategories.reduce((count, sub) => count + sub.entities.length, 0);
     mainHeader.setAttribute('aria-expanded', mainCollapsed ? 'false' : 'true');
     const mainChevron = document.createElement('span');
     mainChevron.textContent = mainCollapsed ? '▸' : '▾';
@@ -445,11 +499,11 @@ function renderTree() {
     addCategory.role = 'button';
     addCategory.tabIndex = 0;
     addCategory.textContent = '+';
-    addCategory.setAttribute('aria-label', `Add a subcategory to ${main.label}`);
-    addCategory.dataset.tooltip = `Add a subcategory to ${main.label}`;
+    addCategory.setAttribute('aria-label', `Add a plugin to ${main.label}`);
+    addCategory.dataset.tooltip = `Add a plugin to ${main.label}`;
     addCategory.onclick = (event) => {
       event.stopPropagation();
-      openCreationDialog('category', main.id, main.label);
+      openCreationDialog('plugin', main.id, main.label);
     };
     mainHeader.appendChild(addCategory);
     mainHeader.onclick = () => {
@@ -464,10 +518,27 @@ function renderTree() {
     };
     mainSection.appendChild(mainHeader);
 
+    mainSection.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      mainSection.classList.add('dropTarget');
+    });
+    mainSection.addEventListener('dragleave', (event) => {
+      if (!mainSection.contains(event.relatedTarget)) mainSection.classList.remove('dropTarget');
+    });
+    mainSection.addEventListener('drop', async (event) => {
+      if (event.target.closest('.subcategory')) return;
+      event.preventDefault();
+      mainSection.classList.remove('dropTarget');
+      const id = event.dataTransfer.getData('text/orkestra-plugin');
+      if (id) await movePlugin(id, main.id);
+    });
+
     if (mainCollapsed) {
       entityTree.appendChild(mainSection);
       return;
     }
+
+    main.entities.forEach((entity) => mainSection.appendChild(createEntityRow(entity, selected)));
 
     main.subcategories.forEach((category) => {
       const section = document.createElement('section');
@@ -536,56 +607,7 @@ function renderTree() {
       }
 
       category.entities.forEach((entity) => {
-        const row = document.createElement('div');
-        row.className = `entityRow ${entity.domain || 'guidance'}`;
-        row.classList.toggle('active', selected && selected.id === entity.id);
-        row.classList.toggle('installed', Boolean(entity.installed?.global || entity.installed?.project));
-        row.classList.toggle('blocked', isBlocked(entity));
-        row.draggable = true;
-        row.addEventListener('dragstart', (event) => {
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/orkestra-plugin', entity.id);
-        });
-        const indicator = document.createElement('span');
-        indicator.className = 'domainIndicator';
-        indicator.textContent = domainIndicator(entity.domain);
-
-        const label = document.createElement('button');
-        label.type = 'button';
-        label.className = 'entityLabel';
-        label.setAttribute('aria-label', `Preview plugin ${entity.id}`);
-        label.onclick = () => selectEntity(entity.id);
-        const name = document.createElement('strong');
-        name.textContent = entity.name || entity.id;
-        const meta = document.createElement('small');
-        meta.textContent = entity.id;
-        label.appendChild(name);
-        label.appendChild(meta);
-
-        const scopeToggles = document.createElement('div');
-        scopeToggles.className = 'scopeToggles';
-        [['global', 'U', 'User'], ['project', 'P', 'Project']].forEach(([scope, text, labelText]) => {
-          const installed = Boolean(entity.installed?.[scope]);
-          const modified = Boolean(entity.modified?.[scope]);
-          const toggle = document.createElement('button');
-          toggle.type = 'button';
-          toggle.className = 'scopeToggle tooltipTarget tooltipLeft';
-          toggle.classList.toggle('active', installed);
-          toggle.classList.toggle('modified', modified);
-          toggle.setAttribute('aria-pressed', installed ? 'true' : 'false');
-          toggle.setAttribute('aria-label', `${installed ? 'Remove' : 'Install'} ${entity.id} ${installed ? 'from' : 'in'} ${labelText} scope`);
-          toggle.dataset.tooltip = installed
-            ? `Remove from ${labelText} scope${modified ? ' (local changes detected)' : ''}`
-            : `Install in ${labelText} scope`;
-          toggle.textContent = text;
-          toggle.onclick = () => toggleEntityScope(entity, scope);
-          scopeToggles.appendChild(toggle);
-        });
-
-        row.appendChild(indicator);
-        row.appendChild(label);
-        row.appendChild(scopeToggles);
-        section.appendChild(row);
+        section.appendChild(createEntityRow(entity, selected));
       });
 
       mainSection.appendChild(section);

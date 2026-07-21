@@ -1,6 +1,6 @@
 id: agent.tooling.orkestra-communication
 name: Orkestra Communication Skill
-category: agent.tooling
+category: meta
 domain: guidance
 type: markdown
 executable: false

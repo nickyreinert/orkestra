@@ -52,11 +52,15 @@ def watch_signature(paths: list[Path]) -> str:
 
 SERVER_SIGNATURE = watch_signature(SERVER_WATCH_FILES)
 ENTITY_CATEGORY_TREE = [
-    ("core", "CORE & PLATFORM", [("core.platform", "platform")]),
-    ("agent", "AGENT", [("agent.persona", "persona"), ("agent.capabilities", "capabilities")]),
-    ("topology", "TOPOLOGY", [("topology.blueprints", "blueprints")]),
-    ("standards", "STANDARDS", [("standards.code", "code"), ("standards.design", "design")]),
-    ("workflow", "WORKFLOWS", [("workflow.automation", "automation")]),
+    ("topology", "TOPOLOGY", []),
+    ("standards", "STANDARDS", [
+        ("standards.code", "code"),
+        ("standards.design", "design"),
+        ("standards.persona", "persona"),
+    ]),
+    ("workflow", "WORKFLOW", []),
+    ("tooling", "TOOLING", []),
+    ("meta", "META", []),
 ]
 DOMAIN_META = {
     "guidance": {"label": "Guidance", "indicator": "◇"},
@@ -217,27 +221,26 @@ def normalize_entity_category(category: str) -> str:
     aliases = {
         "style": "coding.standards",
         "styles": "coding.standards",
-        "topology": "projects.blueprints",
-        "topologies": "projects.blueprints",
+        "topologies": "topology",
         "skill": "coding.domain",
         "skills": "coding.domain",
-        "workflow": "automation.workflows",
-        "workflows": "automation.workflows",
-        "hook": "enforcement.hooks",
-        "hooks": "enforcement.hooks",
-        "agent-style": "agent.profiles",
-        "agent-styles": "agent.profiles",
-        "general": "enforcement.policies",
-        "agent.profiles": "agent.persona",
-        "agent.tooling": "agent.capabilities",
-        "projects.blueprints": "topology.blueprints",
+        "workflows": "workflow",
+        "hook": "workflow",
+        "hooks": "workflow",
+        "agent-style": "standards.persona",
+        "agent-styles": "standards.persona",
+        "general": "standards.code",
+        "agent.profiles": "standards.persona",
+        "agent.tooling": "tooling",
+        "projects.blueprints": "topology",
         "coding.standards": "standards.code",
         "coding.architecture": "standards.design",
         "coding.domain": "standards.design",
-        "enforcement.policies": "core.platform",
-        "enforcement.hooks": "workflow.automation",
-        "automation.scripts": "workflow.automation",
-        "automation.workflows": "workflow.automation",
+        "enforcement.policies": "standards.code",
+        "enforcement.hooks": "workflow",
+        "automation.scripts": "workflow",
+        "automation.workflows": "workflow",
+        "workflow.automation": "workflow",
     }
     return aliases.get(category, category)
 
@@ -585,7 +588,7 @@ def remove_plugin_source(entity_id: str) -> None:
 
 def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
     main, _, sub = category.partition(".")
-    if main not in known_main_categories() or not sub or not safe_name(sub):
+    if main not in known_main_categories() or (sub and not safe_name(sub)):
         raise ValueError("Invalid plugin category")
     if plugin_type not in PLUGIN_TYPES:
         raise ValueError("Plugin type must be markdown, yaml, or shell")
@@ -595,7 +598,10 @@ def create_plugin_source(category: str, name: str, plugin_type: str) -> dict:
     entity_id = f"{category}.{slug}"
     if find_entity_source_file(entity_id):
         raise ValueError("A plugin with this id already exists")
-    plugin_dir = ROOT / "content" / "source" / main / sub / slug
+    category_dir = ROOT / "content" / "source" / main
+    if sub:
+        category_dir /= sub
+    plugin_dir = category_dir / slug
     source_file = plugin_dir / "manifest.yaml"
     plugin_dir.mkdir(parents=True, exist_ok=True)
     executable = plugin_type == "shell"
@@ -811,7 +817,12 @@ def collect_entities_index() -> dict:
         for sub_id, sub_label in subcategories:
             known_subcategories.add(sub_id)
             sub_out.append({"id": sub_id, "label": sub_label, "entities": categories.get(sub_id, [])})
-        category_tree.append({"id": main_id, "label": main_label, "subcategories": sub_out})
+        category_tree.append({
+            "id": main_id,
+            "label": main_label,
+            "entities": categories.get(main_id, []),
+            "subcategories": sub_out,
+        })
 
     for category in custom_categories():
         category_id = str(category["id"])
@@ -831,11 +842,17 @@ def collect_entities_index() -> dict:
         label = cat.split(".", 1)[1] if "." in cat else cat
         target = next((item for item in category_tree if item["id"] == main), None)
         if target is None:
-            target = {"id": main, "label": main.upper(), "subcategories": []}
+            target = {"id": main, "label": main.upper(), "entities": categories.get(main, []), "subcategories": []}
             category_tree.append(target)
-        target["subcategories"].append({"id": cat, "label": label, "entities": categories[cat]})
+        if cat == main:
+            target["entities"] = categories[cat]
+        else:
+            target["subcategories"].append({"id": cat, "label": label, "entities": categories[cat]})
 
     ordered_categories = [
+        {"id": main["id"], "label": main["label"], "entities": main["entities"]}
+        for main in category_tree
+    ] + [
         {"id": sub["id"], "label": sub["label"], "entities": sub["entities"]}
         for main in category_tree
         for sub in main["subcategories"]
@@ -2102,7 +2119,8 @@ class Handler(BaseHTTPRequestHandler):
             entity_id = str(data.get("id") or "").strip()
             category = str(data.get("category") or "").strip()
             source_file = find_entity_source_file(entity_id) if safe_name(entity_id) else None
-            known_categories = {sub_id for _, _, subs in ENTITY_CATEGORY_TREE for sub_id, _ in subs}
+            known_categories = known_main_categories()
+            known_categories.update(sub_id for _, _, subs in ENTITY_CATEGORY_TREE for sub_id, _ in subs)
             known_categories.update(str(item.get("id")) for item in custom_categories())
             if source_file is None or category not in known_categories:
                 return self._send_json({"error": "Invalid plugin or destination category"}, status=400)
@@ -2112,8 +2130,11 @@ class Handler(BaseHTTPRequestHandler):
             if source_entity.get("category") == category:
                 return self._send_json({"ok": True, "entities": collect_entities_index()})
             main, _, sub = category.partition(".")
+            destination_parent = ROOT / "content" / "source" / main
+            if sub:
+                destination_parent /= sub
             if source_file.name == "manifest.yaml":
-                destination_dir = ROOT / "content" / "source" / main / sub / source_file.parent.name
+                destination_dir = destination_parent / source_file.parent.name
                 if destination_dir.exists():
                     return self._send_json({"error": "A plugin with that directory already exists in the destination"}, status=409)
                 raw = replace_yaml_value(source_file.read_text(encoding="utf-8"), "category", category)
@@ -2121,7 +2142,7 @@ class Handler(BaseHTTPRequestHandler):
                 destination_dir.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(source_file.parent), str(destination_dir))
                 return self._send_json({"ok": True, "entities": collect_entities_index()})
-            destination = ROOT / "content" / "source" / main / sub / source_file.name
+            destination = destination_parent / source_file.name
             if destination != source_file and destination.exists():
                 return self._send_json({"error": "A plugin with that filename already exists in the destination"}, status=409)
             raw = replace_yaml_value(source_file.read_text(encoding="utf-8"), "category", category)

@@ -282,6 +282,7 @@ textarea {
   opacity: 1;
 }
 
+.category.dropTarget,
 .subcategory.dropTarget {
   outline: 1px dashed var(--accent);
   outline-offset: 2px;

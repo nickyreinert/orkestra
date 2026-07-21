@@ -1,5 +1,5 @@
 id: agent.profiles.claude-code-personal-driver
-name: Claude Code Personal Driver
+name: Personal Agent Preferences
 category: agent.profiles
 domain: guidance
 type: markdown
@@ -7,18 +7,18 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Personal Claude Code guidance for CLAUDE.local.md.
+  Private, local preferences that tune coding-agent behavior for one user.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [global, project]
 conflicts_with: []
 requires: []
-tags: [claude-code, local, personal]
+tags: [agents, local, personal]
 content: |
-  # Claude Code Personal Driver
+  # Personal Agent Preferences
 
-  - Use `CLAUDE.local.md` for private preferences and personal habits.
-  - Keep it git-ignored when it lives in a project repo.
+  - Use the active agent's local instruction file for private preferences and personal habits.
+  - Keep personal instruction files git-ignored when they live in a project repo.
   - Paste reviewer comments and convert recurring feedback into personal rules.
   - Separate team project feedback from personal habits.
   - Prune rules regularly to avoid bloat.

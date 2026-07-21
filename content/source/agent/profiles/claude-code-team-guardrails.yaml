@@ -1,5 +1,5 @@
 id: agent.profiles.claude-code-team-guardrails
-name: Claude Code Team Guardrails
+name: Project Agent Guardrails
 category: agent.profiles
 domain: guidance
 type: markdown
@@ -7,18 +7,18 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Recommended CLAUDE.md team guidance sections and boundaries.
+  Shared project guidance and boundaries for coding agents.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [project]
 conflicts_with: []
 requires: []
-tags: [claude-code, claude-md, guardrails]
+tags: [agents, project-instructions, guardrails]
 content: |
-  # Claude Code Team Guardrails
+  # Project Agent Guardrails
 
-  - Keep `CLAUDE.md` concise and committed to the repo.
+  - Keep the project's agent instruction entrypoint concise and committed to the repo.
   - Use it for team guardrails that should load at every session start.
   - Keep short focus rules and avoid verbose prose.
   - Include development workflow, build/test/run commands, code style conventions, architecture overview, and recurring mistakes.
-  - Let Claude append rules for itself after errors when that convention is useful.
+  - Add durable rules after recurring errors when that convention is useful.

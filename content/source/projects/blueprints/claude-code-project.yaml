@@ -1,28 +1,23 @@
 id: projects.blueprints.claude-code-project
-name: Claude Code Project Layout
-category: projects.blueprints
+name: Coding Agent Project Layout
+category: tooling
 domain: guidance
 type: yaml
 executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Claude Code project file layout and precedence from the operational reference.
+  Adapter-driven project layout and precedence for coding-agent configuration.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [project]
 conflicts_with: []
 requires: [agent.profiles.claude-code-team-guardrails]
-tags: [claude-code, layout, claude-directory]
+tags: [agents, layout, configuration]
 content: |
-  # Claude Code Project Layout
+  # Coding Agent Project Layout
 
-  - Use `.claude/` for project-level config committed to Git.
-  - Use `~/.claude/` for personal cross-project defaults.
-  - Use `.claude/CLAUDE.md` or root `CLAUDE.md` for team instructions.
-  - Use `CLAUDE.local.md` for ignored personal project preferences.
-  - Store project settings in `.claude/settings.json`.
-  - Store reusable expertise in `.claude/skills/`.
-  - Store custom subagents in `.claude/agents/`.
-  - Store path-gated rule files in `.claude/rules/`.
+  - Use the active Orkestra adapter for project and user configuration locations.
+  - Commit shared project instructions and keep personal preferences local.
+  - Keep settings, reusable skills, subagents, and path-specific rules in their adapter-defined locations.
   - More local rules override broader rules.

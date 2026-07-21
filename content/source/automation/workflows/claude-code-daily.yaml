@@ -1,5 +1,5 @@
 id: automation.workflows.claude-code-daily
-name: Claude Code Daily Workflow
+name: Daily Agent Workflow
 category: automation.workflows
 domain: guidance
 type: markdown
@@ -7,18 +7,18 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Daily Claude Code workflow patterns from the operational reference.
+  Daily coding-agent workflow patterns for implementation and review.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [global, project]
 conflicts_with: []
 requires: [agent.profiles.claude-code-operating-premises]
-tags: [claude-code, workflow, daily]
+tags: [agents, workflow, daily]
 content: |
-  # Claude Code Daily Workflow
+  # Daily Agent Workflow
 
   - Reproduce a bug before fixing it.
-  - Use `/batch` for migrations and mass edits.
+  - Use the agent's batch workflow for migrations and mass edits when available.
   - Delegate unfamiliar code exploration to a subagent.
   - Run multiple sessions in separate Git worktrees for parallel work.
   - For review, pass session writes to a read-only session.

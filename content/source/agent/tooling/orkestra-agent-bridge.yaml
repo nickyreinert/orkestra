@@ -1,6 +1,6 @@
 id: agent.tooling.orkestra-agent-bridge
 name: Orkestra Agent Bridge
-category: agent.tooling
+category: meta
 domain: guidance
 type: markdown
 executable: false

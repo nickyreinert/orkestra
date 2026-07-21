@@ -1,5 +1,5 @@
 id: agent.tooling.claude-code-settings
-name: Claude Code Settings
+name: Agent Runtime Settings
 category: agent.tooling
 domain: guidance
 type: json
@@ -7,17 +7,17 @@ executable: false
 version: 0.1.0
 author: orkestra-core
 description: >
-  Claude Code settings.json conventions for permissions, environment, and hooks.
+  Coding-agent conventions for permissions, environment, and hooks.
 compatibility:
-  agents: [claude]
+  agents: [claude, codex, copilot, cursor, cline, aider]
   scopes: [project]
 conflicts_with: []
 requires: [projects.blueprints.claude-code-project]
-tags: [claude-code, settings, permissions]
+tags: [agents, settings, permissions]
 content: |
-  # Claude Code Settings
+  # Agent Runtime Settings
 
-  - Keep project settings in `.claude/settings.json`.
+  - Keep agent-specific project settings in the location expected by the active adapter.
   - Allow routine read/edit and local Git inspection commands.
   - Deny risky commands such as direct pushes, hard resets, and recursive deletion unless explicitly intended.
   - Keep environment defaults non-sensitive.
