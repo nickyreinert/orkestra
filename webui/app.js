@@ -186,7 +186,10 @@ function editedFileContent(entity, file) {
 }
 
 function selectedValues(select) {
-  return Array.from(select.selectedOptions || []).map((option) => option.value);
+  if (select.selectedOptions) {
+    return Array.from(select.selectedOptions).map((option) => option.value);
+  }
+  return Array.from(select.querySelectorAll('input:checked')).map((input) => input.value);
 }
 
 function checkboxValues(container) {
@@ -212,13 +215,32 @@ function renderCheckboxGroup(container, options, selected, prefix) {
 
 function renderPluginSelect(select, selected, entityId) {
   select.innerHTML = '';
+  const details = document.createElement('details');
+  details.className = 'pluginPickerMenu';
+  const summary = document.createElement('summary');
+  const count = selected.length;
+  summary.textContent = count ? `${count} selected` : 'None';
+  details.appendChild(summary);
+  const panel = document.createElement('div');
+  panel.className = 'pluginPickerPanel';
   appState.entities.filter((item) => item.id !== entityId).forEach((item) => {
-    const option = document.createElement('option');
-    option.value = item.id;
-    option.textContent = item.name || item.id;
-    option.selected = selected.includes(item.id);
-    select.appendChild(option);
+    const field = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = item.id;
+    input.checked = selected.includes(item.id);
+    input.onchange = () => {
+      const currentCount = selectedValues(select).length;
+      summary.textContent = currentCount ? `${currentCount} selected` : 'None';
+      markDirty();
+    };
+    const text = document.createElement('span');
+    text.textContent = item.name || item.id;
+    field.append(input, text);
+    panel.appendChild(field);
   });
+  details.appendChild(panel);
+  select.appendChild(details);
 }
 
 function pluginDirectoryName(entity) {

@@ -82,13 +82,17 @@
               <dt>Tags</dt>
               <dd><input id="entityTags" type="text" aria-label="Plugin tags"></dd>
             </div>
+          </dl>
+          <details class="advancedMeta">
+            <summary>Advanced metadata</summary>
+            <dl class="metaGrid advancedMetaGrid">
             <div>
               <dt>Requires</dt>
-              <dd><select id="entityRequires" multiple aria-label="Required plugins"></select></dd>
+              <dd><div id="entityRequires" class="pluginPicker" aria-label="Required plugins"></div></dd>
             </div>
             <div>
               <dt>Conflicts</dt>
-              <dd><select id="entityConflicts" multiple aria-label="Conflicting plugins"></select></dd>
+              <dd><div id="entityConflicts" class="pluginPicker" aria-label="Conflicting plugins"></div></dd>
             </div>
             <div>
               <dt>Tools</dt>
@@ -102,7 +106,8 @@
               <dt>Entrypoint</dt>
               <dd><input id="entityEntrypoint" type="text" aria-label="Script entrypoint"></dd>
             </div>
-          </dl>
+            </dl>
+          </details>
         </article>
 
         <article class="previewPane">
