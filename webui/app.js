@@ -1,4 +1,5 @@
 const projectInput = document.getElementById('projectInput');
+const scopePathLabel = document.getElementById('scopePathLabel');
 const entitySearch = document.getElementById('entitySearch');
 const entityTree = document.getElementById('entityTree');
 const agentMatrix = document.getElementById('agentMatrix');
@@ -35,9 +36,7 @@ const entityDomainEl = document.getElementById('entityDomain');
 const entityTypeEl = document.getElementById('entityType');
 const entityConflictsEl = document.getElementById('entityConflicts');
 const entityTagsEl = document.getElementById('entityTags');
-const entityScopesEl = document.getElementById('entityScopes');
 const entityRequiresEl = document.getElementById('entityRequires');
-const entityRequiresToolsEl = document.getElementById('entityRequiresTools');
 const entityRuntimeEl = document.getElementById('entityRuntime');
 const entityEntrypointEl = document.getElementById('entityEntrypoint');
 const settingsBtn = document.getElementById('settingsBtn');
@@ -52,6 +51,12 @@ const agentApiModalEndpoint = document.getElementById('agentApiModalEndpoint');
 const copyAgentApiModalBtn = document.getElementById('copyAgentApiModalBtn');
 const addPluginFileBtn = document.getElementById('addPluginFileBtn');
 const deletePluginBtn = document.getElementById('deletePluginBtn');
+const welcomeView = document.getElementById('welcomeView');
+const entityBody = document.getElementById('entityBody');
+const browsePluginsBtn = document.getElementById('browsePluginsBtn');
+const welcomeSettingsBtn = document.getElementById('welcomeSettingsBtn');
+const welcomePluginCount = document.getElementById('welcomePluginCount');
+const welcomeAgentCount = document.getElementById('welcomeAgentCount');
 const assetDialog = document.getElementById('assetDialog');
 const assetForm = document.getElementById('assetForm');
 const assetName = document.getElementById('assetName');
@@ -64,16 +69,18 @@ const cancelRemoveBtn = document.getElementById('cancelRemoveBtn');
 const confirmRemoveBtn = document.getElementById('confirmRemoveBtn');
 
 let appState = {
-  scope: 'global',
+  scope: 'source',
   entities: [],
   categories: [],
   categoryTree: [],
   domains: [],
   scopeChanges: { global: false, project: false },
+  paths: { source: '', global: '', project: '' },
   activeDomains: new Set(['guidance', 'enforcement', 'automation']),
   agents: [],
   selectedAgents: new Set(),
   collapsedCategories: new Set(),
+  collapseStateInitialized: false,
   selectedId: '',
   editingContentId: '',
   activeFileByEntity: new Map(),
@@ -108,10 +115,11 @@ async function apiPost(path, payload) {
 }
 
 function currentEntity() {
-  return appState.entities.find((entity) => entity.id === appState.selectedId) || appState.entities[0] || null;
+  return appState.entities.find((entity) => entity.id === appState.selectedId) || null;
 }
 
 function isInstalled(entity) {
+  if (appState.scope === 'source') return true;
   return Boolean(entity && entity.installed && entity.installed[appState.scope]);
 }
 
@@ -250,7 +258,9 @@ function pluginDirectoryName(entity) {
 }
 
 function installedAssetPath(entity, file) {
-  if (!entity || !file || !isInstalled(entity)) return 'Not installed in current scope';
+  if (!entity || !file) return 'Not installed in current scope';
+  if (appState.scope === 'source') return file.path || entity.path || '-';
+  if (!isInstalled(entity)) return 'Not installed in current scope';
   const base = entity.installPaths?.[appState.scope] || '-';
   const root = entity.installRoots?.[appState.scope] || (appState.scope === 'project' ? '.orkestra' : '~/.config/orkestra');
   if (file.role === 'instructions' || file.role === 'legacy') return base;
@@ -264,6 +274,16 @@ function installedAssetPath(entity, file) {
       : `${root}/config/${name}/${file.label}`;
   }
   return base;
+}
+
+function scopeLabel(scope) {
+  if (scope === 'source') return 'Source';
+  if (scope === 'global') return 'User';
+  return 'Project';
+}
+
+function scopePath(scope) {
+  return appState.paths[scope] || '-';
 }
 
 function domainIndicator(domain) {
@@ -293,7 +313,7 @@ function selectEntity(id) {
 function renderScopeControls() {
   document.querySelectorAll('.segment').forEach((button) => {
     button.classList.toggle('active', button.dataset.scope === appState.scope);
-    const modified = Boolean(appState.scopeChanges[button.dataset.scope]);
+    const modified = button.dataset.scope !== 'source' && Boolean(appState.scopeChanges[button.dataset.scope]);
     button.classList.toggle('hasChanges', modified);
     const dot = button.querySelector('.scopeChangeDot');
     if (dot) dot.hidden = !modified;
@@ -305,6 +325,8 @@ function renderScopeControls() {
       render();
     };
   });
+  scopePathLabel.textContent = scopeLabel(appState.scope);
+  projectInput.value = scopePath(appState.scope);
 }
 
 function renderAgents() {
@@ -356,6 +378,11 @@ async function applyEntityIndex(data) {
   appState.categoryTree = data.categoryTree || [];
   appState.domains = data.domains || [];
   appState.scopeChanges = data.scopeChanges || { global: false, project: false };
+  appState.paths = {
+    source: data.source?.path || appState.paths.source || '',
+    global: data.scopes?.global?.root || appState.paths.global || '',
+    project: data.scopes?.project?.root || data.project?.path || appState.paths.project || '',
+  };
 }
 
 function openCreationDialog(mode, target, label) {
@@ -470,8 +497,7 @@ function renderTree() {
           ...sub,
           entities: sub.entities.filter((entity) => matchesQuery(entity) && matchesDomain(entity)),
         })),
-    }))
-    .filter((main) => main.entities.length > 0 || main.subcategories.some((sub) => sub.entities.length > 0));
+    }));
 
   tree.forEach((main) => {
     const mainSection = document.createElement('section');
@@ -590,11 +616,16 @@ function renderTree() {
 
       section.addEventListener('dragover', (event) => {
         event.preventDefault();
+        event.stopPropagation();
         section.classList.add('dropTarget');
       });
-      section.addEventListener('dragleave', () => section.classList.remove('dropTarget'));
+      section.addEventListener('dragleave', (event) => {
+        event.stopPropagation();
+        section.classList.remove('dropTarget');
+      });
       section.addEventListener('drop', async (event) => {
         event.preventDefault();
+        event.stopPropagation();
         section.classList.remove('dropTarget');
         const id = event.dataTransfer.getData('text/orkestra-plugin');
         if (!id) return;
@@ -620,6 +651,10 @@ function renderTree() {
 
 function renderDetails() {
   const entity = currentEntity();
+  welcomeView.hidden = Boolean(entity);
+  entityBody.hidden = !entity;
+  welcomePluginCount.textContent = String(appState.entities.length);
+  welcomeAgentCount.textContent = String(appState.agents.length);
   if (!entity) {
     entityIdEl.textContent = 'Select a plugin';
     entityNameEl.value = 'No plugin selected';
@@ -651,13 +686,11 @@ function renderDetails() {
     entityVersionEl.value = entity.version || '';
     entityAuthorEl.value = entity.author || '';
     renderCheckboxGroup(entityAgentsEl, appState.agents.map((agent) => ({ value: agent, label: agent })), entity.agents || [], 'agent');
-    renderCheckboxGroup(entityScopesEl, [{ value: 'global', label: 'User' }, { value: 'project', label: 'Project' }], entity.scopes || [], 'scope');
     entityDomainEl.value = entity.domain || 'guidance';
     entityTypeEl.value = entity.type || 'markdown';
     renderPluginSelect(entityConflictsEl, entity.conflictsWith || [], entity.id);
     entityTagsEl.value = formatList(entity.tags).replace('-', '');
     renderPluginSelect(entityRequiresEl, entity.requires || [], entity.id);
-    entityRequiresToolsEl.value = formatList(entity.requiresTools).replace('-', '');
     entityRuntimeEl.value = entity.runtime || '';
     entityEntrypointEl.value = entity.entrypoint || '';
     appState.editingContentId = entity.id;
@@ -665,9 +698,16 @@ function renderDetails() {
     saveContentBtn.disabled = true;
   }
   renderPluginFiles(entity);
-  sourcePathText.textContent = `${editableFiles(entity).length} file${editableFiles(entity).length === 1 ? '' : 's'}`;
-  installedPathText.textContent = isInstalled(entity) ? 'Installed in selected scope' : 'Not installed in selected scope';
-  installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
+  sourcePathText.textContent = entity.path || `${editableFiles(entity).length} file${editableFiles(entity).length === 1 ? '' : 's'}`;
+  if (appState.scope === 'source') {
+    installedPathText.textContent = entity.path || 'Editing source files';
+    installedPathText.className = 'pathValue ok';
+  } else {
+    installedPathText.textContent = isInstalled(entity)
+      ? (entity.installPaths?.[appState.scope] || `Installed in ${scopeLabel(appState.scope)} scope`)
+      : `Not installed in ${scopeLabel(appState.scope)} scope`;
+    installedPathText.className = 'pathValue' + (isInstalled(entity) ? ' ok' : '');
+  }
   document.querySelectorAll('.shellOnly').forEach((field) => {
     field.hidden = entityTypeEl.value !== 'shell';
   });
@@ -683,7 +723,9 @@ function renderPluginFiles(entity) {
     const label = document.createElement('strong');
     label.textContent = file.label || file.path;
     const paths = document.createElement('code');
-    paths.textContent = `${file.path}${isInstalled(entity) ? `  ->  ${installedAssetPath(entity, file)}` : ''}`;
+    paths.textContent = appState.scope === 'source'
+      ? file.path
+      : `${file.path}${isInstalled(entity) ? `  ->  ${installedAssetPath(entity, file)}` : ''}`;
     const title = document.createElement('div');
     title.append(label, paths);
     head.appendChild(title);
@@ -723,23 +765,31 @@ async function refresh() {
   appState.categoryTree = data.categoryTree || [];
   appState.domains = data.domains || [];
   appState.scopeChanges = data.scopeChanges || { global: false, project: false };
+  appState.paths = {
+    source: data.source?.path || '',
+    global: data.scopes?.global?.root || '',
+    project: data.scopes?.project?.root || data.project?.path || '',
+  };
   appState.agents = data.agents || [];
   if (appState.agents.length === 0) appState.agents = ['codex'];
   appState.agents.forEach((agent) => appState.selectedAgents.add(agent));
 
-  const projectPath = data.project?.path || '';
-  projectInput.value = projectPath;
-  if (!appState.selectedId && appState.entities.length) {
-    appState.selectedId = appState.entities[0].id;
-  }
-  if (appState.collapsedCategories.size === 0) {
-    appState.categoryTree.forEach((main) => main.subcategories.forEach((subcategory) => appState.collapsedCategories.add(subcategory.id)));
+  if (!appState.collapseStateInitialized) {
+    appState.categoryTree.forEach((main) => {
+      appState.collapsedCategories.add(main.id);
+      main.subcategories.forEach((subcategory) => appState.collapsedCategories.add(subcategory.id));
+    });
+    appState.collapseStateInitialized = true;
   }
   render();
 }
 
 async function setEntityScope(entity, scope, enabled) {
   if (!entity) return;
+  if (scope === 'source') {
+    setStatus('Source is edited directly. Use Save to write source changes.', 'ok');
+    return;
+  }
   try {
     setStatus(`${enabled ? 'Installing' : 'Removing'} ${entity.id} ...`);
     const data = await apiPost(`/api/entities/${enabled ? 'enable' : 'disable'}`, {
@@ -748,7 +798,7 @@ async function setEntityScope(entity, scope, enabled) {
       ...(enabled ? { agents: Array.from(appState.selectedAgents) } : {}),
     });
     await applyEntityIndex(data.entities);
-    setStatus(`${enabled ? 'Installed' : 'Removed'} ${entity.id} in ${scope === 'global' ? 'user' : 'project'} scope`, 'ok');
+    setStatus(`${enabled ? 'Installed' : 'Removed'} ${entity.id} in ${scopeLabel(scope)} scope`, 'ok');
     render();
   } catch (error) {
     setStatus(error.message, 'error');
@@ -818,13 +868,13 @@ async function saveSelectedContent(targets) {
       version: entityVersionEl.value,
       author: entityAuthorEl.value,
       agents: checkboxValues(entityAgentsEl),
-      scopes: checkboxValues(entityScopesEl),
+      scopes: entity.scopes || ['global', 'project'],
       domain: entityDomainEl.value,
       type: entityTypeEl.value,
       tags: parseList(entityTagsEl.value),
       conflictsWith: selectedValues(entityConflictsEl),
       requires: selectedValues(entityRequiresEl),
-      requiresTools: parseList(entityRequiresToolsEl.value),
+      requiresTools: entity.requiresTools || [],
       runtime: entityRuntimeEl.value,
       entrypoint: entityEntrypointEl.value,
       targets,
@@ -881,7 +931,7 @@ async function removePlugin() {
   try {
     const data = await apiPost('/api/entities/remove', { id: entity.id });
     await applyEntityIndex(data.entities);
-    appState.selectedId = appState.entities[0]?.id || '';
+    appState.selectedId = '';
     appState.fileEdits.clear();
     appState.contentDirty = false;
     render();
@@ -931,6 +981,11 @@ document.querySelectorAll('.entityInfo input, .entityInfo select, .entityInfo te
 
 saveContentBtn.addEventListener('click', openSaveScopeDialog);
 settingsBtn.addEventListener('click', openSettings);
+welcomeSettingsBtn.addEventListener('click', openSettings);
+browsePluginsBtn.addEventListener('click', () => {
+  entitySearch.focus();
+  entitySearch.select();
+});
 closeSettingsBtn.addEventListener('click', () => { settingsView.hidden = true; mainView.hidden = false; });
 saveSettingsBtn.addEventListener('click', saveSettings);
 agentApiBtn.addEventListener('click', () => {

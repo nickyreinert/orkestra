@@ -1,6 +1,6 @@
 id: coding.domain.frontend-vanilla-modules
 name: Vanilla JavaScript Modules
-category: coding.domain
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

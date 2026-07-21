@@ -36,6 +36,7 @@ WEBUI_WATCH_FILES = [
     WEBUI_DIR / "index.html",
     WEBUI_DIR / "app.js",
     WEBUI_DIR / "styles.css",
+    ROOT / "orkestra.png",
 ]
 SERVER_WATCH_FILES = [Path(__file__).resolve()]
 
@@ -219,11 +220,11 @@ def collect_extras() -> list[dict]:
 
 def normalize_entity_category(category: str) -> str:
     aliases = {
-        "style": "coding.standards",
-        "styles": "coding.standards",
+        "style": "standards.code",
+        "styles": "standards.code",
         "topologies": "topology",
-        "skill": "coding.domain",
-        "skills": "coding.domain",
+        "skill": "standards.design",
+        "skills": "standards.design",
         "workflows": "workflow",
         "hook": "workflow",
         "hooks": "workflow",
@@ -873,6 +874,13 @@ def collect_entities_index() -> dict:
         ],
         "scopeChanges": scope_changes,
         "agents": list_agents(),
+        "source": {
+            "path": str(source_dir),
+        },
+        "scopes": {
+            "global": {"root": str(entity_scope_dir("global"))},
+            "project": {"root": str(entity_scope_dir("project"))},
+        },
         "project": {
             "path": str(PROJECT_DIR),
             "initialized": (PROJECT_DIR / ".orkestra").is_dir(),
@@ -1729,6 +1737,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_file(WEBUI_DIR / "app.js", "application/javascript; charset=utf-8")
         if path == "/styles.css":
             return self._send_file(WEBUI_DIR / "styles.css", "text/css; charset=utf-8")
+        if path == "/orkestra.png":
+            return self._send_file(ROOT / "orkestra.png", "image/png")
 
         if path == "/api/templates":
             rendered_global_dir = PROJECT_DIR / ".orkestra" / "instructions" / "global"
@@ -1774,7 +1784,7 @@ class Handler(BaseHTTPRequestHandler):
                             "GET /api/entities lists plugins, hierarchy, installed state, and agent availability.",
                             "POST /api/entities/create creates a markdown, yaml, or shell plugin in a category.",
                             "POST /api/entities/update writes editable plugin metadata, description, and content.",
-                            "POST /api/entities/move moves a plugin to another second-level category.",
+                            "POST /api/entities/move moves a plugin to another section or subsection.",
                             "POST /api/entities/enable and /disable deploy or remove a plugin for a scope.",
                         ],
                     },
@@ -2708,6 +2718,7 @@ def main() -> None:
     print(f"Orkestra WebUI: http://{HOST}:{PORT}")
     print(f"Distribution root: {ROOT}")
     print(f"Project cwd: {PROJECT_DIR}")
+    print(f"Press ESC or Ctrl+C to exit.")
     server.serve_forever()
 
 

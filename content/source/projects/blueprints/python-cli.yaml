@@ -1,6 +1,6 @@
 id: projects.blueprints.python-cli
 name: Python CLI Application
-category: projects.blueprints
+category: topology
 domain: guidance
 type: yaml
 executable: false

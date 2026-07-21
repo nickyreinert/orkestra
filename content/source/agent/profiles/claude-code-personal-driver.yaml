@@ -1,6 +1,6 @@
 id: agent.profiles.claude-code-personal-driver
 name: Personal Agent Preferences
-category: agent.profiles
+category: standards.persona
 domain: guidance
 type: markdown
 executable: false

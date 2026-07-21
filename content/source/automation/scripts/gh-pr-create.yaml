@@ -1,6 +1,6 @@
 id: automation.scripts.gh-pr-create
 name: Create And Label Pull Request
-category: automation.scripts
+category: workflow
 domain: automation
 type: shell
 executable: true

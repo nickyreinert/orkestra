@@ -1,6 +1,6 @@
 id: automation.workflows.test-driven-review
 name: Test Driven Review
-category: automation.workflows
+category: workflow
 domain: guidance
 type: markdown
 executable: false

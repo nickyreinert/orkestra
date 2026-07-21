@@ -1,6 +1,6 @@
 id: automation.workflows.plan-code-review
 name: Plan Code Review Loop
-category: automation.workflows
+category: workflow
 domain: guidance
 type: markdown
 executable: false

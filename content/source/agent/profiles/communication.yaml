@@ -1,6 +1,6 @@
 id: agent.profiles.communication
 name: Concise Communication
-category: agent.profiles
+category: standards.persona
 domain: guidance
 type: markdown
 executable: false

@@ -1,6 +1,6 @@
 id: coding.standards.google-docstrings
 name: Google Style Docstrings
-category: coding.standards
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

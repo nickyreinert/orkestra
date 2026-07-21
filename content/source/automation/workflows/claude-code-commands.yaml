@@ -1,6 +1,6 @@
 id: automation.workflows.claude-code-commands
 name: Agent Session Commands
-category: automation.workflows
+category: workflow
 domain: guidance
 type: markdown
 executable: false

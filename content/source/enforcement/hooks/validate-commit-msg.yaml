@@ -1,6 +1,6 @@
 id: enforcement.hooks.validate-commit-msg
 name: Validate Commit Message
-category: enforcement.hooks
+category: workflow
 domain: enforcement
 type: shell
 executable: true

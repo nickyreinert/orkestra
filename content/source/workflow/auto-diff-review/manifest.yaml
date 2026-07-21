@@ -1,6 +1,6 @@
 id: workflow.auto-diff-review
 name: Auto Diff Review
-category: workflow.automation
+category: workflow
 domain: automation
 type: shell
 executable: true

@@ -1,6 +1,6 @@
 id: agent.tooling.claude-code-mcp
 name: Agent MCP Integrations
-category: agent.tooling
+category: tooling
 domain: guidance
 type: markdown
 executable: false

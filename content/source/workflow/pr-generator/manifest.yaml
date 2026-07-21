@@ -1,6 +1,6 @@
 id: workflow.pr-generator
 name: Context-Aware PR Generator
-category: workflow.automation
+category: workflow
 domain: automation
 type: shell
 executable: true

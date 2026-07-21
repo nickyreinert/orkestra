@@ -1,6 +1,6 @@
 id: automation.workflows.trunk
 name: Trunk Based Delivery
-category: automation.workflows
+category: workflow
 domain: guidance
 type: markdown
 executable: false

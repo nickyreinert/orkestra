@@ -22,16 +22,24 @@ ork_menu() {
     fi
 
     esc=$(printf "\033")
-    printf "%s%s%s%s  %s(esc=cancel)%s\n" "$ORK_GREEN" "$ORK_BOLD" "$prompt" "$ORK_NC" "$ORK_DIM" "$ORK_NC"
+    printf "%s%s%s%s  %s(1-9/0=select, q=quit, esc=cancel)%s\n" "$ORK_GREEN" "$ORK_BOLD" "$prompt" "$ORK_NC" "$ORK_DIM" "$ORK_NC"
     printf "\033[?25l"  # hide cursor
 
     while true; do
         local i=0
         for o in "${options[@]}"; do
-            if [[ $i -eq $cur ]]; then
-                printf "  %s%s> %s%s\033[K\n" "$ORK_CYAN" "$ORK_BOLD" "$o" "$ORK_NC"
+            local shortcut
+            if (( i < 9 )); then
+                shortcut="$((i+1))"
+            elif (( i == 9 )); then
+                shortcut="0"
             else
-                printf "    %s\033[K\n" "$o"
+                shortcut=" "
+            fi
+            if [[ $i -eq $cur ]]; then
+                printf "  %s%s%s > %s%s\033[K\n" "$ORK_CYAN" "$ORK_BOLD" "$shortcut" "$o" "$ORK_NC"
+            else
+                printf "  %s   %s\033[K\n" "$shortcut" "$o"
             fi
             i=$((i+1))
         done
@@ -47,6 +55,32 @@ ork_menu() {
             if   [[ "$key" == "[A" ]]; then cur=$(( cur > 0 ? cur-1 : count-1 ));
             elif [[ "$key" == "[B" ]]; then cur=$(( cur < count-1 ? cur+1 : 0 ));
             fi
+        elif [[ "$key" =~ [1-9] ]]; then
+            local pick=$((key-1))
+            if (( pick < count )); then
+                cur="$pick"
+                break
+            fi
+        elif [[ "$key" == "0" ]]; then
+            if (( count >= 10 )); then
+                cur=9
+                break
+            fi
+        elif [[ "$key" == "q" || "$key" == "Q" ]]; then
+            local quit_index=-1
+            for ((i=0; i<count; i++)); do
+                if [[ "${options[i]}" == "Quit" ]]; then
+                    quit_index="$i"
+                    break
+                fi
+            done
+            if (( quit_index >= 0 )); then
+                cur="$quit_index"
+                break
+            fi
+            printf "\033[?25h"
+            printf "\n"
+            return 130
         elif [[ -z "$key" ]]; then
             break
         fi

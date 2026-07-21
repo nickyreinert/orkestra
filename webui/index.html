@@ -10,7 +10,7 @@
   <main class="shell">
     <aside class="sidebar">
       <div class="sidebarHead">
-        <div class="brand"><span>ORKESTRA</span><span class="brandMark" aria-hidden="true">👹</span><button type="button" id="settingsBtn" class="iconButton tooltipTarget" data-tooltip="Open deployment settings" aria-label="Open deployment settings">⚙</button><button type="button" id="agentApiBtn" class="iconButton tooltipTarget" data-tooltip="Open coding-agent API details" aria-label="Open coding-agent API details">ⓘ</button></div>
+        <div class="brand"><span>ORKESTRA</span><img class="brandLogo" src="/orkestra.png" alt="" aria-hidden="true"><button type="button" id="settingsBtn" class="iconButton tooltipTarget" data-tooltip="Open deployment settings" aria-label="Open deployment settings">⚙</button><button type="button" id="agentApiBtn" class="iconButton tooltipTarget" data-tooltip="Open coding-agent API details" aria-label="Open coding-agent API details">ⓘ</button></div>
         <h1>Plugins</h1>
         <input id="entitySearch" class="searchInput" type="search" placeholder="Search plugins">
         <div class="sidebarDomains">
@@ -28,12 +28,13 @@
           <div>
             <div class="eyebrow">Scope</div>
             <div class="segmented" role="group" aria-label="Scope">
-              <button type="button" class="segment active" data-scope="global"><span>User</span><i class="scopeChangeDot" aria-hidden="true" hidden></i></button>
+              <button type="button" class="segment active" data-scope="source"><span>Source</span><i class="scopeChangeDot" aria-hidden="true" hidden></i></button>
+              <button type="button" class="segment" data-scope="global"><span>User</span><i class="scopeChangeDot" aria-hidden="true" hidden></i></button>
               <button type="button" class="segment" data-scope="project"><span>Project</span><i class="scopeChangeDot" aria-hidden="true" hidden></i></button>
             </div>
           </div>
           <label class="projectSelector">
-            <span>Project</span>
+            <span id="scopePathLabel">Source</span>
             <input id="projectInput" type="text" readonly>
           </label>
           <div class="agentsInline">
@@ -43,7 +44,48 @@
         </div>
       </section>
 
-      <section class="entityBody">
+      <section id="welcomeView" class="welcomeView" aria-labelledby="welcomeTitle">
+        <div class="welcomeIntro">
+          <div class="eyebrow">Plugin workspace</div>
+          <h2 id="welcomeTitle">Shape how coding agents work</h2>
+          <p>Orkestra keeps reusable guidance, enforcement, and automation in one catalog. Build a focused stack for your user account or the current project without maintaining separate instruction files by hand.</p>
+          <div class="welcomeActions">
+            <button type="button" id="browsePluginsBtn" class="smallButton primaryButton">Browse plugins</button>
+            <button type="button" id="welcomeSettingsBtn" class="smallButton">Open settings</button>
+          </div>
+        </div>
+
+        <div class="welcomeStats" aria-label="Catalog summary">
+          <div><strong id="welcomePluginCount">0</strong><span>available plugins</span></div>
+          <div><strong id="welcomeAgentCount">0</strong><span>configured agents</span></div>
+          <div><strong>3</strong><span>editing scopes</span></div>
+        </div>
+
+        <div class="welcomeFeatures">
+          <section>
+            <span class="welcomeFeatureMark" aria-hidden="true">01</span>
+            <h3>Install by scope</h3>
+            <p>Edit canonical Source files, use User scope for defaults across projects, or Project scope for repository-specific behavior.</p>
+          </section>
+          <section>
+            <span class="welcomeFeatureMark" aria-hidden="true">02</span>
+            <h3>Edit at the source</h3>
+            <p>Update metadata, instructions, configuration, and executable assets from the plugin editor.</p>
+          </section>
+          <section>
+            <span class="welcomeFeatureMark" aria-hidden="true">03</span>
+            <h3>Compose a reliable stack</h3>
+            <p>Declare compatible agents, dependencies, conflicts, and required tools alongside each plugin.</p>
+          </section>
+          <section>
+            <span class="welcomeFeatureMark" aria-hidden="true">04</span>
+            <h3>Organize the catalog</h3>
+            <p>Create plugins at the top level or in a subsection, then move them with drag and drop.</p>
+          </section>
+        </div>
+      </section>
+
+      <section id="entityBody" class="entityBody" hidden>
         <article class="entityInfo">
           <div class="entityTitleRow">
             <div>
@@ -65,10 +107,6 @@
             <div>
               <dt>Compatibility</dt>
               <dd><div id="entityAgents" class="checkGroup" aria-label="Compatible agents"></div></dd>
-            </div>
-            <div>
-              <dt>Scopes</dt>
-              <dd><div id="entityScopes" class="checkGroup" aria-label="Compatible scopes"></div></dd>
             </div>
             <div>
               <dt>Domain</dt>
@@ -93,10 +131,6 @@
             <div>
               <dt>Conflicts</dt>
               <dd><div id="entityConflicts" class="pluginPicker" aria-label="Conflicting plugins"></div></dd>
-            </div>
-            <div>
-              <dt>Tools</dt>
-              <dd><input id="entityRequiresTools" type="text" aria-label="Required tools"></dd>
             </div>
             <div class="shellOnly">
               <dt>Runtime</dt>

@@ -1,6 +1,6 @@
 id: enforcement.policies.security-baseline
 name: Security Baseline
-category: enforcement.policies
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

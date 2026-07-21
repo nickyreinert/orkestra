@@ -1,6 +1,6 @@
 id: agent.profiles.claude-code-team-guardrails
 name: Project Agent Guardrails
-category: agent.profiles
+category: standards.persona
 domain: guidance
 type: markdown
 executable: false

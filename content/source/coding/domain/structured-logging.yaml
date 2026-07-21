@@ -1,6 +1,6 @@
 id: coding.domain.structured-logging
 name: Structured Execution Logging
-category: coding.domain
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

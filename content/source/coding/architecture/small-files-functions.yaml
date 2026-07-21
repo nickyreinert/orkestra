@@ -1,6 +1,6 @@
 id: coding.architecture.small-files-functions
 name: Small Files And Functions
-category: coding.architecture
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

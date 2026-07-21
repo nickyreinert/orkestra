@@ -1,6 +1,6 @@
 id: coding.standards.python-naming
 name: Python Naming
-category: coding.standards
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

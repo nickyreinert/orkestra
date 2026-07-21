@@ -1,6 +1,6 @@
 id: coding.standards.clean-code
 name: Clean Code Essentials
-category: coding.standards
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

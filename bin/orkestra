@@ -56,7 +56,7 @@ ${ORK_BOLD}GLOBAL FLAGS${ORK_NC}
       --dry-run    show what would change without writing
   -h, --help       show this help
 
-${ORK_DIM}docs: $ORK_HOME/ARCHITECTURE.md${ORK_NC}
+${ORK_DIM}docs: $ORK_HOME/README.md${ORK_NC}
 EOF
 }
 
@@ -138,16 +138,130 @@ interactive_plugin_scope() {
 
 interactive_pick_entity() {
     local prompt="$1" outvar="$2"
-    local entities=()
-    local id
+    local ids=() names=() categories=() category_keys=() category_labels=() category_counts=()
+    local id file name category index
     while IFS= read -r id; do
-        [[ -n "$id" ]] && entities+=("$id")
+        [[ -n "$id" ]] || continue
+        file="$(ork_entity_source_path "$id")" || continue
+        name="$(ork_entity_yaml_value "$file" "name")"
+        category="$(ork_entity_yaml_value "$file" "category")"
+        [[ -n "$category" ]] || category="${id%.*}"
+        ids+=("$id")
+        names+=("${name:-$id}")
+        categories+=("$category")
+
+        index=-1
+        local i
+        for ((i=0; i<${#category_keys[@]}; i++)); do
+            if [[ "${category_keys[i]}" == "$category" ]]; then
+                index="$i"
+                break
+            fi
+        done
+        if (( index < 0 )); then
+            category_keys+=("$category")
+            category_labels+=("$(format_plugin_category_label "$category")")
+            category_counts+=(1)
+        else
+            category_counts[index]=$((category_counts[index]+1))
+        fi
     done < <(ork_list_entities)
-    [[ ${#entities[@]} -gt 0 ]] || ork_die "No plugins found"
+    [[ ${#ids[@]} -gt 0 ]] || ork_die "No plugins found"
+
+    local category_options=()
+    for ((index=0; index<${#category_keys[@]}; index++)); do
+        category_options+=("${category_labels[index]} (${category_counts[index]})")
+    done
+
+    local category_choice selected_category
+    ork_menu "Choose a plugin category" category_choice "${category_options[@]}" || return 130
+    for ((index=0; index<${#category_options[@]}; index++)); do
+        if [[ "${category_options[index]}" == "$category_choice" ]]; then
+            selected_category="${category_keys[index]}"
+            break
+        fi
+    done
+    [[ -n "${selected_category:-}" ]] || return 130
+
+    local filtered_ids=() filtered_names=()
+    for ((index=0; index<${#ids[@]}; index++)); do
+        if [[ "${categories[index]}" == "$selected_category" ]]; then
+            filtered_ids+=("${ids[index]}")
+            filtered_names+=("${names[index]}")
+        fi
+    done
 
     local selected
-    ork_menu "$prompt" selected "${entities[@]}" || return 130
+    paginated_plugin_menu "$prompt" selected filtered_ids filtered_names || return 130
     printf -v "$outvar" "%s" "$selected"
+}
+
+format_plugin_category_label() {
+    local category="$1" main sub
+    main="${category%%.*}"
+    sub=""
+    [[ "$category" == *.* ]] && sub="${category#*.}"
+    main="$(format_plugin_category_part "$main")"
+    if [[ -n "$sub" ]]; then
+        printf "%s / %s\n" "$main" "$(format_plugin_category_part "$sub")"
+    else
+        printf "%s\n" "$main"
+    fi
+}
+
+format_plugin_category_part() {
+    local part="${1//-/ }"
+    awk '{
+        for (i=1; i<=NF; i++) {
+            $i=toupper(substr($i,1,1)) substr($i,2)
+        }
+        print
+    }' <<< "$part"
+}
+
+paginated_plugin_menu() {
+    local prompt="$1" outvar="$2" ids_ref="$3" names_ref="$4"
+    local page_ids=() page_names=()
+    eval "page_ids=(\"\${${ids_ref}[@]}\")"
+    eval "page_names=(\"\${${names_ref}[@]}\")"
+    local page_size=8 page=0 total=${#page_ids[@]} total_pages
+    total_pages=$(( (total + page_size - 1) / page_size ))
+
+    while true; do
+        local start=$((page * page_size))
+        local end=$((start + page_size))
+        (( end > total )) && end="$total"
+
+        local options=() values=()
+        local i
+        for ((i=start; i<end; i++)); do
+            options+=("${page_ids[i]}  ${page_names[i]}")
+            values+=("${page_ids[i]}")
+        done
+        if (( total_pages > 1 && page < total_pages - 1 )); then
+            options+=("Next page")
+            values+=("__next")
+        fi
+        if (( total_pages > 1 && page > 0 )); then
+            options+=("Previous page")
+            values+=("__prev")
+        fi
+
+        local choice value
+        ork_menu "$prompt (page $((page+1))/$total_pages)" choice "${options[@]}" || return 130
+        for ((i=0; i<${#options[@]}; i++)); do
+            if [[ "${options[i]}" == "$choice" ]]; then
+                value="${values[i]}"
+                break
+            fi
+        done
+
+        case "$value" in
+            __next) page=$((page+1)) ;;
+            __prev) page=$((page-1)) ;;
+            *) printf -v "$outvar" "%s" "$value"; return 0 ;;
+        esac
+    done
 }
 
 interactive_pick_installed_entity() {

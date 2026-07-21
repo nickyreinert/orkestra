@@ -1,6 +1,6 @@
 id: coding.architecture.api-response-envelope
 name: API Response Envelope
-category: coding.architecture
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

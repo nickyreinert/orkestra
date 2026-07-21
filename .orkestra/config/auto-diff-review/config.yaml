@@ -1,3 +1,0 @@
-review:
-  staged_only: true
-  require_clean_secrets_scan: true

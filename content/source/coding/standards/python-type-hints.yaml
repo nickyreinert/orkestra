@@ -1,6 +1,6 @@
 id: coding.standards.python-type-hints
 name: Python Type Hints
-category: coding.standards
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

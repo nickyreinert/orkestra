@@ -31,7 +31,7 @@ case "$what" in
             file="$(ork_entity_source_path "$id")"
             name="$(ork_entity_yaml_value "$file" "name")"
             category="$(ork_entity_yaml_value "$file" "category")"
-            printf "  %s%-28s%s %-12s %s\n" "$ORK_CYAN" "$id" "$ORK_NC" "$category" "$name"
+            printf "  %s%-46s%s %-18s %s\n" "$ORK_CYAN" "$id" "$ORK_NC" "$category" "$name"
         done < <(ork_list_entities)
         ;;
     *)

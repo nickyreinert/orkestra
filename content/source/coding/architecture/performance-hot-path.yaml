@@ -1,6 +1,6 @@
 id: coding.architecture.performance-hot-path
 name: Hot Path Performance
-category: coding.architecture
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

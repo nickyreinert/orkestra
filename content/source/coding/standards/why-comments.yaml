@@ -1,6 +1,6 @@
 id: coding.standards.why-comments
 name: Why Comments Only
-category: coding.standards
+category: standards.code
 domain: guidance
 type: markdown
 executable: false

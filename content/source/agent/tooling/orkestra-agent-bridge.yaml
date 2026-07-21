@@ -21,6 +21,6 @@ content: |
   - Use `GET /api/entities` before changing the catalog.
   - Create custom plugins with `POST /api/entities/create`.
   - Update metadata, description, and content with `POST /api/entities/update`.
-  - Move plugins between second-level categories with `POST /api/entities/move`.
+  - Move plugins between top-level sections or subsections with `POST /api/entities/move`.
   - Deploy plugins through `POST /api/entities/enable`; remove them through `/disable`.
   - Treat installed files as generated output. Edit plugins through the API or source YAML.

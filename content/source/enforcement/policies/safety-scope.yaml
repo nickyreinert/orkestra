@@ -1,6 +1,6 @@
 id: enforcement.policies.safety-scope
 name: Safety And Scope
-category: enforcement.policies
+category: standards.code
 domain: enforcement
 type: markdown
 executable: false

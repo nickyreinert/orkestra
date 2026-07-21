@@ -1,6 +1,6 @@
 id: agent.tooling.claude-code-settings
 name: Agent Runtime Settings
-category: agent.tooling
+category: tooling
 domain: guidance
 type: json
 executable: false

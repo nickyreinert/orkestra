@@ -1,6 +1,6 @@
 id: agent.profiles.claude-code-operating-premises
 name: Agent Operating Principles
-category: agent.profiles
+category: standards.persona
 domain: guidance
 type: markdown
 executable: false

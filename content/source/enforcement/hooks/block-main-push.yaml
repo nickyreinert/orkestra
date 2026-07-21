@@ -1,6 +1,6 @@
 id: enforcement.hooks.block-main-push
 name: Block Main Push
-category: enforcement.hooks
+category: workflow
 domain: enforcement
 type: shell
 executable: true

@@ -1,6 +1,6 @@
 id: workflow.coverage-enforcer
 name: Strict Coverage Enforcer
-category: workflow.automation
+category: workflow
 domain: enforcement
 type: shell
 executable: true

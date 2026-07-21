@@ -1,6 +1,6 @@
 id: coding.architecture.deterministic-control-flow
 name: Deterministic Control Flow
-category: coding.architecture
+category: standards.design
 domain: guidance
 type: markdown
 executable: false

@@ -1,6 +1,6 @@
 id: agent.tooling.claude-code-skills
 name: Agent Skills
-category: agent.tooling
+category: tooling
 domain: guidance
 type: markdown
 executable: false

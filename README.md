@@ -2,233 +2,216 @@
 
 <p align="center"><img src="orkestra.png" width="128" alt="Orkestra logo"></p>
 
-Orchestration framework for VS Code Copilot that coordinates multi-step AI development workflows with optional CLI sub-agents.
+Orkestra is a local plugin manager for coding-agent guidance, project conventions, hooks, workflows, and reusable tooling. It keeps the canonical plugin catalog in one place, then deploys the pieces you choose into user-wide or project-local agent files.
 
-## Purpose
+Orkestra is agent-neutral. It currently ships adapters and generated files for agents such as Codex, Claude, Copilot, Cursor, Cline, and Aider, while keeping the plugin source model independent from any one agent.
 
-- Lead developers through structured planning → coding → review → testing loops
-- Keep Copilot focused on the current workflow step via scoped instructions
-- Delegate specialized checks to CLI sub-agents (Gemini, Mistral, Claude, etc.)
-- Persist workflow state so Copilot can resume seamlessly inside VS Code
+## What It Does
 
-## How It Works
+- Manage reusable coding-agent plugins from a local source catalog.
+- Install plugins into a user scope for defaults across projects.
+- Install plugins into a project scope for repository-specific behavior.
+- Edit canonical plugin source files directly from the WebUI.
+- Render project agent entrypoints such as `AGENTS.md`, `CLAUDE.md`, and Copilot instruction files.
+- Copy plugin assets such as config files and shell tools into the selected scope.
+- Expose a local WebUI and a local API for agents that manage Orkestra itself.
 
-1. User interacts with Copilot Chat.
-2. Copilot reads `.orkestra/state.json` to determine the active step.
-3. Copilot consults `.orkestra/flow.yaml` to load that step's instruction files.
-4. Copilot (or a configured sub-agent) produces the requested output, stores it under `.orkestra/outputs/`, then advances the state.
+## WebUI
 
-## Setup
+Start the local plugin manager:
+
+```bash
+orkestra webui
+```
+
+The CLI prints a local URL, usually `http://127.0.0.1:8732`. Press `Esc` in the terminal, or `Ctrl+C`, to stop the WebUI.
+
+![Orkestra WebUI welcome screen](docs/assets/webui-welcome.png)
+
+The first screen explains the active catalog, configured agents, and available editing scopes.
+
+![Orkestra WebUI source editor](docs/assets/webui-source-editor.png)
+
+Use the sidebar to browse plugins by section and domain. Sections start collapsed, and plugins can live directly in a top-level section or inside a subsection. The main scope switch controls which path you are looking at:
+
+- `Source`: canonical files under `content/source/`
+- `User`: user-wide installation root
+- `Project`: current project's `.orkestra/` installation root
+
+Plugin rows keep dedicated `U` and `P` toggles for installing or removing the plugin in user or project scope.
+
+![Orkestra WebUI deployment settings](docs/assets/webui-settings.png)
+
+The settings view edits agent deployment rules. These rules define where generated agent files, hooks, workflows, MCP configs, and related assets are written.
+
+## Install
 
 ### Quick Install
-
-To install Orkestra globally, run the following command in your terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nickyreinert/orkestra/main/install.sh | bash
 ```
 
-This will download the repository to `~/.orkestra` and add the `bin` directory to your PATH.
+This installs the distribution under `~/.orkestra` and adds `~/.orkestra/bin` to your shell `PATH`.
 
 ### Manual Install
 
-Alternatively, you can clone the repository and install it manually:
-
 ```bash
-git clone https://github.com/nickyreinert/orkestra.git
-cd orkestra
+git clone https://github.com/nickyreinert/orkestra.git ~/.orkestra
+cd ~/.orkestra
 ./install.sh
 ```
 
-### Initialize a New Project
+## Initialize A Project
 
-Once installed, navigate to your project directory and run:
+From a project directory:
 
 ```bash
-mkdir my-new-project
-cd my-new-project
 orkestra init
 ```
 
-Follow the interactive prompts to:
-1. Select a project template (e.g. Python Flask, HTML/JS).
-2. Pick which AI coding agents to support (Copilot, Claude, Codex, …).
-3. Initialize a Git repository (optional).
-
-Or skip the wizard with flags:
+The wizard lets you choose a template, select supported agents, and optionally initialize Git. To skip prompts:
 
 ```bash
-orkestra init --template python-flask --agents copilot,claude --here -y
+orkestra init --template python-flask --agents codex,claude,copilot --here -y
 ```
+
+After initialization, project agent entrypoints are thin hooks that import `.orkestra/AGENTS.md`. Generated files include an `orkestra:generated` marker. Edit source plugins and render again instead of hand-editing generated output.
 
 ## CLI
 
-```
-orkestra                              interactive top-level menu
+```text
+orkestra                           interactive top-level menu
 orkestra init        [--template T] [--agents a,b,c] [--here|--dir N] [-y]
 orkestra render      [--agent a] [--dry-run]
-orkestra list        templates|agents|entities
-orkestra enable      <entity> [--scope project|global] [--agents a,b,c]
-orkestra disable     <entity> [--scope project|global]
+orkestra webui       [--host 127.0.0.1] [--port 8732]
+orkestra ui          alias for webui
+orkestra list        plugins|templates|agents
+orkestra enable      <plugin> [--scope project|global] [--agents a,b,c]
+orkestra disable     <plugin> [--scope project|global]
 orkestra status      [--scope project|global]
-orkestra add-agent    <name>
+orkestra hooks       manage quality hooks
+orkestra mcp         run the Orkestra MCP server on stdio
+orkestra add-agent   <name>
 orkestra remove-agent <name>
 orkestra add-template <name>
 orkestra update      [--check]
 orkestra suggest     <url|path> [--apply]
-orkestra webui       [--host 127.0.0.1] [--port 8732]
 orkestra doctor
 orkestra version
 ```
 
-Global flags: `-y/--yes`, `--quiet`, `--dry-run`.
+Global flags:
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model.
+```text
+-y, --yes        auto-confirm prompts
+--quiet          minimal output
+--dry-run        show what would change without writing
+-h, --help       show help
+```
+
+Running `orkestra` without a command opens the interactive menu for common actions: open the WebUI, install or remove plugins in project/user scope, show installed plugins, initialize or deploy a project template, render agent files, manage hooks, and run doctor checks.
 
 ## Plugin Model
 
-Orkestra installs reusable plugins from `content/source/` into a
-scope-specific `AGENTS.md` index:
+The source catalog lives under `content/source/`. A plugin can be a single YAML file or a directory with `manifest.yaml` plus optional assets.
 
-- Source scope: shipped read-only entities under `content/source/`
-- Global scope: user-wide entities under the platform-specific Orkestra data dir
-- Project scope: repository-local entities under `.orkestra/`
+Directory plugins support three deployment tiers:
 
-Project agent files such as `AGENTS.md`, `CLAUDE.md`, and
-`.github/copilot/instructions.md` are thin hooks that import
-`.orkestra/AGENTS.md`.
+- `instructions.md`: rendered into scope-specific `entities/` files and imported by agent entrypoints.
+- `config.json`, `config.yaml`, or `config/`: copied into the selected scope's `config/` directory.
+- `bin/*.sh`: copied into the selected scope's `bin/` directory.
 
-A plugin can be a backward-compatible single YAML file or a directory with
-`manifest.yaml` and `instructions.md`. Directory plugins support three tiers:
+Scopes:
 
-- Tier 1: instructions are compiled into `.orkestra/entities/` and imported by `AGENTS.md`.
-- Tier 2: `config.json`, `config.yaml`, or `config/` assets are copied into `.orkestra/config/`.
-- Tier 3: `bin/*.sh` tools are copied into `.orkestra/bin/` and referenced by the plugin instructions.
+- `Source`: canonical plugin YAML, Markdown, config, and script files under `content/source/`.
+- `User`: user-wide plugin installation. On macOS this is `~/Library/Application Support/orkestra`; on Linux it is `~/.config/orkestra`; on Windows it is `%APPDATA%\orkestra`.
+- `Project`: repository-local installation under `.orkestra/`.
 
-Global scope uses `~/.config/orkestra/` on Linux, `~/Library/Application Support/orkestra/`
-on macOS, and `%APPDATA%\orkestra\` on Windows.
+## Catalog Sections
 
-## WebUI Global Mode Settings
+The built-in catalog is organized around what the plugin changes:
 
-The WebUI `Global` mode reads files from a small set of common locations only.
-It does not recursively scan your whole home directory.
+- `Topology`: project layouts and templates.
+- `Standards`: code, design, and persona guidance.
+- `Workflow`: repeatable agent workflows and review loops.
+- `Tooling`: agent tools, skills, MCP integration, runtime settings, and executable helpers.
+- `Meta`: plugins that teach agents how to work on Orkestra itself.
 
-Default locations are defined in `settings/global-locations.yaml`:
+Domains describe how a plugin behaves:
 
-- `global_locations`: common folders (top-level files only)
-- `global_files`: exact file paths
+- `Guidance`: instructions and conventions.
+- `Enforcement`: policies and hooks that block or validate behavior.
+- `Automation`: repeatable commands, scripts, and workflow helpers.
 
-You can override these defaults per machine in:
+## Project Layout
 
-- `~/.config/orkestra/settings.yaml`
+Distribution checkout:
 
-Example:
-
-```yaml
-global_locations:
-    claude:
-        - ~/.claude
-    copilot:
-        - ~/.github
-
-global_files:
-    codex:
-        - ~/AGENTS.md
-    copilot:
-        - ~/.github/copilot-instructions.md
+```text
+~/.orkestra/
+|-- bin/orkestra
+|-- lib/
+|-- adapters/
+|-- content/
+|   |-- source/
+|   |-- settings/
+|   |-- templates/
+|   |-- hooks/
+|   `-- skills/
+|-- tools/
+`-- webui/
 ```
 
-## Usage
+Initialized project:
 
-### Start Workflow
-
-Run the VS Code task `Orkestra: Start Workflow` or ask Copilot:
-
+```text
+my-project/
+|-- .orkestra/
+|   |-- AGENTS.md
+|   |-- entities/
+|   |-- config/
+|   |-- bin/
+|   `-- manifest.yaml
+|-- AGENTS.md
+|-- CLAUDE.md
+`-- .github/copilot/instructions.md
 ```
-@workspace Start the orchestrate workflow
+
+The exact generated files depend on the selected agents and deployment rules.
+
+## Settings
+
+Deployment rules live in `content/settings/agents-config.yaml` and can be edited from the WebUI settings screen. A user override may also exist in the platform-specific Orkestra settings directory.
+
+The settings model controls:
+
+- configured agents
+- generated project files
+- generated user files
+- hooks
+- workflows
+- MCP config placement
+- global and project deployment strategies
+
+## Agent API
+
+While the WebUI is running, coding agents can inspect the local management contract:
+
+```text
+GET http://127.0.0.1:8732/api/agent-context
 ```
 
-### Reset Workflow
+The response documents the catalog and supported endpoints for listing, creating, editing, moving, installing, and removing plugins.
 
-Run the task `Orkestra: Reset` or execute:
+## Development
+
+Run syntax checks for the WebUI pieces:
 
 ```bash
-rm -f .orkestra/state.json && echo '{"current_step_index": 0, "previous_output": {}, "loaded_instructions": []}' > .orkestra/state.json
+node --check webui/app.js
+python3 -m py_compile tools/webui_server.py
+git diff --check
 ```
 
-### Workflow Steps (Default)
-
-0. Planning (Product Manager) → produces `.orkestra/outputs/plan.md`
-1. Backend (Backend Developer) → produces `.orkestra/outputs/backend.md`
-2. Frontend (Frontend Developer) → produces `.orkestra/outputs/frontend.md`
-3. Review (Gemini sub-agent) → produces `.orkestra/outputs/review.md`
-
-## Structure
-
-```
-~/.orkestra/                     # distribution
-├── bin/orkestra                 # CLI entrypoint
-├── lib/{cli,ui,core}/           # subcommands + helpers
-├── adapters/{copilot,claude,codex,generic}/
-├── instructions/global/         # universal sources rendered for every project
-├── templates/                   # project templates (python-flask, html-js, …)
-└── ARCHITECTURE.md
-```
-
-After `orkestra init`, your project gets:
-
-```
-my-project/
-├── .orkestra/                   # manifest, flow, state, config, outputs
-├── .github/copilot-instructions.md   # if 'copilot' enabled
-├── CLAUDE.md, .claude/          # if 'claude' enabled
-└── AGENTS.md                    # if 'codex' enabled
-```
-
-Generated files carry a `<!-- orkestra:generated … -->` marker. Edit the
-**sources** in `~/.orkestra/`, then run `orkestra render`.
-
-Key points:
-- **Where defined:** Flavors are declared during `init-orkestra.sh` and referenced in `flow.yaml` or `config.yaml`.
-- **What they change:** the set of instruction files, default task order, scaffolding templates, and optional sub-agent hooks.
-- **How instructions are chosen:** When a flavor is active, Orkestra will prefer instruction files under `instructions/<flavor>/` (if present) and fall back to the global files in `instructions/`.
-
-Example `flow.yaml`:
-
-```yaml
-steps:
-    - id: planning
-        role: product
-        instructions:
-            - instructions/global.instructions.md
-            - instructions/python-flask/planning.instructions.md
-        output: .orkestra/outputs/plan.md
-
-    - id: backend
-        role: backend
-        instructions:
-            - instructions/global.instructions.md
-            - instructions/python-flask/coding.instructions.md
-        output: .orkestra/outputs/backend.md
-```
-
-This approach keeps global guidance available while allowing flavor-specific behavior to override or extend steps.
-
-## Customization
-
-### Add Custom Steps
-
-Edit `.orkestra/flow.yaml` to insert new roles, inputs, outputs, or sub-agents.
-
-### Add CLI Validators
-
-Define new entries under `sub_agents` or `validation_tools` inside `.orkestra/config.yaml` to integrate linters, security scanners, or other automation.
-
-## Sub-Agents & Tools
-
-Orkestra's default configuration references example CLI tools (like `gemini-cli`, `mistral`, `claude-code`). **These are not installed by Orkestra.**
-
-You must:
-1.  Install the CLI tools you want to use (e.g., `pip install gemini-cli` if available, or your own wrapper script).
-2.  Ensure they are in your system `PATH`.
-3.  Or, edit `.orkestra/config.yaml` to point to the correct executable path (e.g., `command: "/usr/bin/python3 scripts/my_gemini_wrapper.py"`).
+The README is the primary project documentation for the current CLI, WebUI, plugin model, and deployment scopes.
