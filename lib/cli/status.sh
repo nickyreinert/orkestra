@@ -28,7 +28,7 @@ printf "  scope    : %s\n" "$scope"
 printf "  path     : %s\n" "$scope_dir"
 printf "  AGENTS.md: %s\n" "$index"
 
-printf "\nInstalled entities:\n"
+printf "\nInstalled plugins:\n"
 if [[ -d "$entities_dir" ]] && find "$entities_dir" -type f -name "*.md" | grep -q .; then
     while IFS= read -r f; do
         rel="${f#$entities_dir/}"

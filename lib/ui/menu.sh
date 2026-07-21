@@ -22,7 +22,7 @@ ork_menu() {
     fi
 
     esc=$(printf "\033")
-    printf "%s%s%s%s\n" "$ORK_GREEN" "$ORK_BOLD" "$prompt" "$ORK_NC"
+    printf "%s%s%s%s  %s(esc=cancel)%s\n" "$ORK_GREEN" "$ORK_BOLD" "$prompt" "$ORK_NC" "$ORK_DIM" "$ORK_NC"
     printf "\033[?25l"  # hide cursor
 
     while true; do
@@ -38,7 +38,12 @@ ork_menu() {
 
         IFS= read -rsn1 key
         if [[ "$key" == "$esc" ]]; then
-            IFS= read -rsn2 key
+            IFS= read -rsn2 -t 1 key || key=""
+            if [[ -z "$key" ]]; then
+                printf "\033[?25h"
+                printf "\n"
+                return 130
+            fi
             if   [[ "$key" == "[A" ]]; then cur=$(( cur > 0 ? cur-1 : count-1 ));
             elif [[ "$key" == "[B" ]]; then cur=$(( cur < count-1 ? cur+1 : 0 ));
             fi
@@ -78,7 +83,7 @@ ork_multiselect() {
     fi
 
     esc=$(printf "\033")
-    printf "%s%s%s%s  %s(space=toggle, enter=confirm)%s\n" \
+    printf "%s%s%s%s  %s(space=toggle, enter=confirm, esc=cancel)%s\n" \
         "$ORK_GREEN" "$ORK_BOLD" "$prompt" "$ORK_NC" "$ORK_DIM" "$ORK_NC"
     printf "\033[?25l"
 
@@ -94,7 +99,12 @@ ork_multiselect() {
 
         IFS= read -rsn1 key
         if [[ "$key" == "$esc" ]]; then
-            IFS= read -rsn2 key
+            IFS= read -rsn2 -t 1 key || key=""
+            if [[ -z "$key" ]]; then
+                printf "\033[?25h"
+                printf "\n"
+                return 130
+            fi
             if   [[ "$key" == "[A" ]]; then cur=$(( cur > 0 ? cur-1 : count-1 ));
             elif [[ "$key" == "[B" ]]; then cur=$(( cur < count-1 ? cur+1 : 0 ));
             fi

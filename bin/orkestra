@@ -20,6 +20,8 @@ source "$ORK_HOME/lib/ui/menu.sh"
 source "$ORK_HOME/lib/core/paths.sh"
 # shellcheck source=../lib/core/manifest.sh
 source "$ORK_HOME/lib/core/manifest.sh"
+# shellcheck source=../lib/core/entities.sh
+source "$ORK_HOME/lib/core/entities.sh"
 
 usage() {
     cat <<EOF
@@ -32,18 +34,18 @@ ${ORK_BOLD}USAGE${ORK_NC}
 ${ORK_BOLD}COMMANDS${ORK_NC}
   init        scaffold .orkestra/ + agent files in a project
   render      re-render agent files from current sources
-  webui       run Orkestra WebUI server
+  webui       run the local plugin manager WebUI
   ui          alias for webui
-  list        list templates|agents|entities
-  enable      install an entity into a scope
-  disable     remove an entity from a scope
-  status      show active scope and installed entities
+  list        list plugins|templates|agents
+  enable      install a plugin into a scope
+  disable     remove a plugin from a scope
+  status      show active scope and installed plugins
   add-agent   enable an agent in the current project
   remove-agent disable an agent in the current project
   add-template scaffold a new template in your user dir
   update      pull latest distribution and re-render
   suggest     diff a remote markdown URL against current sources
-  hooks       manage quality hooks (install, add, remove, run)
+  hooks       manage quality hooks
   mcp         run Orkestra MCP server (stdio)
   doctor      check installation & project health
   version     print version
@@ -79,24 +81,127 @@ interactive_menu() {
     ork_header "Orkestra v$ORK_VERSION"
     local choice
     ork_menu "What do you want to do?" choice \
-        "Initialize a new project here" \
-        "Re-render agent files (current project)" \
-        "Start WebUI (current project)" \
-        "List available templates" \
-        "List available agents" \
+        "Open plugin manager WebUI" \
+        "Install plugin in this project" \
+        "Remove plugin from this project" \
+        "Install plugin for this user" \
+        "Remove plugin from this user" \
+        "Show installed plugins" \
+        "Initialize or deploy project template" \
+        "Re-render project agent files" \
         "Manage quality hooks" \
         "Run doctor checks" \
-        "Quit"
+        "Quit" || exit 0
     case "$choice" in
-        "Initialize a new project here") exec "$0" init ;;
-        "Re-render agent files (current project)") exec "$0" render ;;
-        "Start WebUI (current project)") exec "$0" webui ;;
-        "List available templates") exec "$0" list templates ;;
-        "List available agents")    exec "$0" list agents ;;
-        "Manage quality hooks")     exec "$0" hooks ;;
-        "Run doctor checks")        exec "$0" doctor ;;
+        "Open plugin manager WebUI") exec "$0" webui ;;
+        "Install plugin in this project") interactive_plugin_scope enable project ;;
+        "Remove plugin from this project") interactive_plugin_scope disable project ;;
+        "Install plugin for this user") interactive_plugin_scope enable global ;;
+        "Remove plugin from this user") interactive_plugin_scope disable global ;;
+        "Show installed plugins") interactive_status ;;
+        "Initialize or deploy project template") exec "$0" init ;;
+        "Re-render project agent files") exec "$0" render ;;
+        "Manage quality hooks") exec "$0" hooks ;;
+        "Run doctor checks") exec "$0" doctor ;;
         *) exit 0 ;;
     esac
+}
+
+interactive_status() {
+    local scope_label scope
+    ork_menu "Which scope?" scope_label "Project" "User" || exit 0
+    [[ "$scope_label" == "User" ]] && scope="global" || scope="project"
+    exec "$0" status --scope "$scope"
+}
+
+interactive_plugin_scope() {
+    local action="$1" scope="$2"
+    local prompt entity
+    [[ "$action" == "enable" ]] && prompt="Pick a plugin to install" || prompt="Pick a plugin to remove"
+    if [[ "$action" == "enable" ]]; then
+        interactive_pick_entity "$prompt" entity || exit 0
+    else
+        interactive_pick_installed_entity "$prompt" "$scope" entity || exit 0
+    fi
+
+    if [[ "$action" == "enable" ]]; then
+        local agents_csv
+        interactive_pick_agents_csv "$scope" agents_csv || exit 0
+        if [[ -n "$agents_csv" ]]; then
+            exec "$0" enable "$entity" --scope "$scope" --agents "$agents_csv"
+        fi
+        exec "$0" enable "$entity" --scope "$scope"
+    fi
+
+    exec "$0" disable "$entity" --scope "$scope"
+}
+
+interactive_pick_entity() {
+    local prompt="$1" outvar="$2"
+    local entities=()
+    local id
+    while IFS= read -r id; do
+        [[ -n "$id" ]] && entities+=("$id")
+    done < <(ork_list_entities)
+    [[ ${#entities[@]} -gt 0 ]] || ork_die "No plugins found"
+
+    local selected
+    ork_menu "$prompt" selected "${entities[@]}" || return 130
+    printf -v "$outvar" "%s" "$selected"
+}
+
+interactive_pick_installed_entity() {
+    local prompt="$1" scope="$2" outvar="$3"
+    local project entities_dir installed=()
+    project="$(pwd)"
+    entities_dir="$(ork_entities_install_dir "$scope" "$project")"
+    if [[ -d "$entities_dir" ]]; then
+        local file rel id
+        while IFS= read -r file; do
+            rel="${file#$entities_dir/}"
+            id="${rel%.md}"
+            id="${id//\//.}"
+            [[ -n "$id" ]] && installed+=("$id")
+        done < <(find "$entities_dir" -type f -name "*.md" | sort)
+    fi
+    [[ ${#installed[@]} -gt 0 ]] || ork_die "No plugins installed in $scope scope"
+
+    local selected
+    ork_menu "$prompt" selected "${installed[@]}" || return 130
+    printf -v "$outvar" "%s" "$selected"
+}
+
+interactive_pick_agents_csv() {
+    local scope="$1" outvar="$2"
+    local agents=()
+    local agent
+    if [[ "$scope" == "project" && -f ".orkestra/manifest.yaml" ]]; then
+        while IFS= read -r agent; do
+            [[ -n "$agent" ]] && agents+=("$agent")
+        done < <(awk '
+            /^agents:/ { in_agents=1; next }
+            in_agents && /^[[:space:]]+-[[:space:]]+/ { sub(/^[[:space:]]+-[[:space:]]+/, ""); print; next }
+            in_agents && /^[^[:space:]]/ { in_agents=0 }
+        ' ".orkestra/manifest.yaml")
+    else
+        while IFS= read -r agent; do
+            [[ -n "$agent" && "$agent" != "generic" ]] && agents+=("$agent")
+        done < <(ork_list_agents)
+        local selected
+        ork_multiselect "Apply plugin hook files for which agents?" selected "${agents[@]}" || return 130
+        agents=()
+        while IFS= read -r agent; do
+            [[ -n "$agent" ]] && agents+=("$agent")
+        done <<< "$selected"
+        [[ ${#agents[@]} -gt 0 ]] || ork_die "Select at least one agent"
+    fi
+
+    local csv="" sep=""
+    for agent in "${agents[@]}"; do
+        csv+="$sep$agent"
+        sep=","
+    done
+    printf -v "$outvar" "%s" "$csv"
 }
 
 case "$cmd" in

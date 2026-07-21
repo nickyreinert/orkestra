@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# orkestra enable <entity> [--scope project|global] [--agents a,b,c]
+# orkestra enable <plugin> [--scope project|global] [--agents a,b,c]
 set -euo pipefail
 source "$ORK_HOME/lib/ui/colors.sh"
 source "$ORK_HOME/lib/core/paths.sh"
@@ -15,9 +15,9 @@ while [[ $# -gt 0 ]]; do
         --agents) agents_csv="$2"; shift 2 ;;
         -h|--help)
             cat <<EOF
-orkestra enable <entity> [--scope project|global] [--agents a,b,c]
+orkestra enable <plugin> [--scope project|global] [--agents a,b,c]
 
-Installs an entity into the selected scope and refreshes thin agent hook files.
+Installs a plugin into the selected scope and refreshes thin agent hook files.
 EOF
             exit 0 ;;
         -*)
@@ -27,7 +27,7 @@ EOF
     esac
 done
 
-[[ -n "$entity" ]] || ork_die "Usage: orkestra enable <entity> [--scope project|global] [--agents a,b,c]"
+[[ -n "$entity" ]] || ork_die "Usage: orkestra enable <plugin> [--scope project|global] [--agents a,b,c]"
 [[ "$scope" == "project" || "$scope" == "global" ]] || ork_die "Invalid scope: $scope"
 
 project="$(pwd)"
@@ -46,4 +46,4 @@ else
 fi
 
 ork_write_agent_hooks "$scope" "$project" "${agents[@]}"
-ork_ok "enabled $entity in $scope scope"
+ork_ok "enabled plugin $entity in $scope scope"
