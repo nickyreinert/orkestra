@@ -127,10 +127,20 @@
       </section>
       </section>
       <section id="settingsView" class="settingsView" hidden>
-        <div class="settingsHead"><div><div class="eyebrow">Settings</div><h2>Deployment configuration</h2><p>Configure coding agents, hook destinations, and deployment rules for this user.</p></div><button type="button" id="closeSettingsBtn" class="smallButton">Back</button></div>
+        <div class="settingsHead">
+          <div>
+            <div class="eyebrow">Settings</div>
+            <h2>Deployment configuration</h2>
+            <p>Configure coding agents, hook destinations, and deployment rules for this user.</p>
+          </div>
+          <div class="settingsActions">
+            <button type="button" id="saveSettingsBtn" class="smallButton primaryButton">Save settings</button>
+            <button type="button" id="closeSettingsBtn" class="smallButton">Back</button>
+          </div>
+        </div>
         <div class="settingsGrid">
+          <aside class="settingsHelp"><h3>Configuration notes</h3><p>Add an agent under <code>agents</code>, define generated files under <code>deployments</code>, and use project deployments for repository hook files or global deployments for user-wide files.</p></aside>
           <label class="settingsField"><span>Agent deployment rules</span><textarea id="agentsConfigEditor" spellcheck="false"></textarea></label>
-          <aside class="settingsHelp"><h3>Configuration</h3><p>Add an agent under <code>agents</code>, then define its generated files under <code>deployments</code>. Existing Claude, Codex, and Copilot mappings can be changed here.</p><p>Use a project deployment for repository hook files and a global deployment for user-wide files.</p><button type="button" id="saveSettingsBtn" class="smallButton primaryButton">Save settings</button></aside>
         </div>
       </section>
     </section>

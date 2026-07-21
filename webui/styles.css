@@ -1218,24 +1218,43 @@ textarea {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
   padding: 18px;
   overflow: auto;
 }
-.settingsHead { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.settingsHead { display: flex; justify-content: space-between; gap: 18px; }
 .settingsHead h2 { margin: 5px 0; font-size: 20px; }
 .settingsHead p { margin: 0; color: var(--muted); font-size: 13px; }
+.settingsActions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
 .settingsGrid {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
 }
 .settingsField { display: grid; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .settingsField textarea { min-height: 0; padding: 14px; border: 1px solid var(--border); border-radius: 6px; outline: none; resize: none; color: var(--text); background: #0b0b0b; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 1.5; }
 .settingsField textarea:focus { border-color: var(--accent); }
-.settingsHelp { align-self: start; padding: 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
-.settingsHelp h3 { margin: 0 0 12px; font-size: 14px; }
-.settingsHelp p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.settingsHelp {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.settingsHelp h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 13px;
+}
+.settingsHelp p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .settingsHelp code, .agentApiInstructions code { color: var(--accent); font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
 .agentApiInstructions { margin-top: 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
@@ -1247,6 +1266,12 @@ textarea {
   .shell,
   .entityBody {
     grid-template-columns: 1fr;
+  }
+
+  .settingsHead,
+  .settingsHelp {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .metaGrid {
