@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import errno
 import os
 import re
 import shutil
@@ -30,6 +31,7 @@ DEFAULT_AGENTS_CONFIG_PATH = ROOT / "content" / "settings" / "agents-config.yaml
 USER_AGENTS_CONFIG_PATH = HOME_DIR / ".config" / "orkestra" / "agents-config.yaml"
 HOST = os.environ.get("ORKESTRA_WEBUI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ORKESTRA_WEBUI_PORT", "8732"))
+PORT_SCAN_LIMIT = int(os.environ.get("ORKESTRA_WEBUI_PORT_SCAN_LIMIT", "50"))
 AUTO_RELOAD_SERVER = os.environ.get("ORKESTRA_WEBUI_AUTO_RELOAD_SERVER", "1") == "1"
 
 WEBUI_WATCH_FILES = [
@@ -2824,8 +2826,25 @@ class Handler(BaseHTTPRequestHandler):
             return
 
 
+def bind_server(host: str, requested_port: int) -> tuple[ThreadingHTTPServer, int]:
+    last_error: OSError | None = None
+    max_port = min(65535, requested_port + max(0, PORT_SCAN_LIMIT))
+    for candidate_port in range(requested_port, max_port + 1):
+        try:
+            return ThreadingHTTPServer((host, candidate_port), Handler), candidate_port
+        except OSError as exc:
+            last_error = exc
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            if candidate_port == requested_port:
+                print(f"Port {requested_port} is already in use; trying the next available port...")
+    raise last_error or OSError(f"Could not bind {host}:{requested_port}")
+
+
 def main() -> None:
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    global PORT
+    server, bound_port = bind_server(HOST, PORT)
+    PORT = bound_port
     print(f"Orkestra WebUI: http://{HOST}:{PORT}")
     print(f"Distribution root: {ROOT}")
     print(f"Project cwd: {PROJECT_DIR}")
