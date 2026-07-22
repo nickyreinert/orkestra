@@ -42,6 +42,7 @@ const entityEntrypointEl = document.getElementById('entityEntrypoint');
 const settingsBtn = document.getElementById('settingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const mainView = document.getElementById('mainView');
+const workspace = document.querySelector('.workspace');
 const settingsView = document.getElementById('settingsView');
 const agentsConfigEditor = document.getElementById('agentsConfigEditor');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
@@ -311,20 +312,23 @@ function selectEntity(id) {
 }
 
 function renderScopeControls() {
+  const entity = currentEntity();
   document.querySelectorAll('.segment').forEach((button) => {
     button.classList.toggle('active', button.dataset.scope === appState.scope);
-    const modified = button.dataset.scope !== 'source' && Boolean(appState.scopeChanges[button.dataset.scope]);
+    const modified = button.dataset.scope !== 'source' && Boolean(entity?.modified?.[button.dataset.scope]);
     button.classList.toggle('hasChanges', modified);
     const dot = button.querySelector('.scopeChangeDot');
     if (dot) dot.hidden = !modified;
     button.setAttribute('aria-label', modified
-      ? `${button.textContent.trim()} scope has deployed changes`
+      ? `${button.textContent.trim()} scope differs from source for selected plugin`
       : `${button.textContent.trim()} scope`);
     button.onclick = () => {
       appState.scope = button.dataset.scope;
       render();
     };
   });
+  workspace.classList.remove('scopeSource', 'scopeUser', 'scopeProject');
+  workspace.classList.add(appState.scope === 'global' ? 'scopeUser' : `scope${scopeLabel(appState.scope)}`);
   scopePathLabel.textContent = scopeLabel(appState.scope);
   projectInput.value = scopePath(appState.scope);
 }
@@ -713,11 +717,47 @@ function renderDetails() {
   });
 }
 
+function fileStatusForScope(file) {
+  if (appState.scope === 'source') return null;
+  return file.scopeStatus?.[appState.scope] || null;
+}
+
+function fileStatusLabel(status) {
+  if (!status || !status.installable) return 'Source only';
+  if (!status.installed) return `Not installed in ${scopeLabel(appState.scope)}`;
+  return status.modified ? 'Modified in scope' : 'In sync';
+}
+
+async function syncPluginFile(entity, file, direction) {
+  if (!entity || appState.scope === 'source') return;
+  const action = direction === 'source-to-scope' ? 'Pushing source' : 'Pulling scope changes';
+  try {
+    setStatus(`${action} for ${file.label || file.path} ...`);
+    const data = await apiPost('/api/entities/sync', {
+      id: entity.id,
+      scope: appState.scope,
+      direction,
+      path: file.path,
+    });
+    await applyEntityIndex(data.entities);
+    appState.fileEdits.clear();
+    appState.contentDirty = false;
+    appState.editingContentId = entity.id;
+    setStatus(`${file.label || file.path} synced`, 'ok');
+    render();
+  } catch (error) {
+    setStatus(error.message, 'error');
+  }
+}
+
 function renderPluginFiles(entity) {
   pluginFilesList.innerHTML = '';
   editableFiles(entity).forEach((file) => {
+    const status = fileStatusForScope(file);
     const card = document.createElement('section');
     card.className = 'pluginFile';
+    card.classList.toggle('modified', Boolean(status?.modified));
+    card.classList.toggle('inSync', Boolean(status?.installed && !status?.modified));
     const head = document.createElement('div');
     head.className = 'pluginFileHead';
     const label = document.createElement('strong');
@@ -726,9 +766,30 @@ function renderPluginFiles(entity) {
     paths.textContent = appState.scope === 'source'
       ? file.path
       : `${file.path}${isInstalled(entity) ? `  ->  ${installedAssetPath(entity, file)}` : ''}`;
+    const state = document.createElement('span');
+    state.className = 'fileSyncState';
+    state.textContent = appState.scope === 'source' ? 'Source' : fileStatusLabel(status);
     const title = document.createElement('div');
-    title.append(label, paths);
+    title.append(label, paths, state);
     head.appendChild(title);
+    const actions = document.createElement('div');
+    actions.className = 'pluginFileActions';
+    if (appState.scope !== 'source' && status?.installable) {
+      const push = document.createElement('button');
+      push.type = 'button';
+      push.className = 'smallButton tooltipTarget';
+      push.textContent = 'Push source';
+      push.dataset.tooltip = `Copy source file to ${scopeLabel(appState.scope)} scope`;
+      push.onclick = () => syncPluginFile(entity, file, 'source-to-scope');
+      const pull = document.createElement('button');
+      pull.type = 'button';
+      pull.className = 'smallButton tooltipTarget';
+      pull.textContent = 'Pull scope';
+      pull.disabled = !status.installed;
+      pull.dataset.tooltip = `Copy installed ${scopeLabel(appState.scope)} file back to source`;
+      pull.onclick = () => syncPluginFile(entity, file, 'scope-to-source');
+      actions.append(push, pull);
+    }
     if (['script', 'config', 'document'].includes(file.role)) {
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -737,8 +798,9 @@ function renderPluginFiles(entity) {
       remove.dataset.tooltip = `Remove ${file.label}`;
       remove.setAttribute('aria-label', `Remove ${file.label}`);
       remove.onclick = () => removePluginFile(entity, file);
-      head.appendChild(remove);
+      actions.appendChild(remove);
     }
+    if (actions.childNodes.length) head.appendChild(actions);
     const editor = document.createElement('textarea');
     editor.className = 'markdownPreview pluginFileEditor';
     editor.dataset.filePath = file.path;

@@ -676,6 +676,57 @@ def rendered_plugin_content(entity: dict, source_file: Path) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def strip_rendered_entity_header(content: str) -> str:
+    lines = content.splitlines()
+    if lines and lines[0].startswith("<!-- orkestra:entity "):
+        lines = lines[1:]
+    return "\n".join(lines).strip() + "\n"
+
+
+def installed_file_target(scope: str, entity: dict, source_file: Path, editable_file: dict) -> Path | None:
+    role = str(editable_file.get("role") or "")
+    rel_path = str(editable_file.get("path") or "")
+    label = str(editable_file.get("label") or "")
+    if role in {"instructions", "legacy"}:
+        return entity_installed_path(scope, entity["id"])
+    if role == "script":
+        return entity_scope_dir(scope) / "bin" / Path(label or rel_path).name
+    if role == "config" and source_file.name == "manifest.yaml":
+        plugin_dir = source_file.parent
+        try:
+            asset_rel = (ROOT / rel_path).resolve().relative_to(plugin_dir.resolve())
+        except ValueError:
+            return None
+        return entity_scope_dir(scope) / "config" / plugin_dir.name / asset_rel
+    return None
+
+
+def expected_installed_file_content(entity: dict, source_file: Path, editable_file: dict) -> str:
+    role = str(editable_file.get("role") or "")
+    if role in {"instructions", "legacy"}:
+        return rendered_plugin_content(entity, source_file)
+    return str(editable_file.get("content") or "")
+
+
+def editable_file_scope_status(scope: str, entity: dict, source_file: Path, editable_file: dict) -> dict:
+    target = installed_file_target(scope, entity, source_file, editable_file)
+    if target is None:
+        return {"installable": False, "installed": False, "modified": False, "path": ""}
+    installed = target.exists()
+    modified = False
+    if installed:
+        try:
+            modified = target.read_text(encoding="utf-8") != expected_installed_file_content(entity, source_file, editable_file)
+        except OSError:
+            modified = True
+    return {
+        "installable": True,
+        "installed": installed,
+        "modified": modified,
+        "path": str(target),
+    }
+
+
 def scope_plugin_is_modified(scope: str, entity: dict, source_file: Path) -> bool:
     destination = entity_installed_path(scope, entity["id"])
     if not destination.exists():
@@ -712,6 +763,34 @@ def scope_plugin_is_modified(scope: str, entity: dict, source_file: Path) -> boo
         if not deployed.exists() or deployed.read_text(encoding="utf-8") != expected:
             return True
     return False
+
+
+def sync_editable_file_source_to_scope(scope: str, entity: dict, source_file: Path, editable_file: dict) -> None:
+    role = str(editable_file.get("role") or "")
+    rel_path = str(editable_file.get("path") or "")
+    content = str(editable_file.get("content") or "")
+    if role in {"instructions", "legacy"}:
+        write_installed_plugin(scope, entity, source_file)
+        return
+    if not entity_installed_path(scope, entity["id"]).exists():
+        write_installed_plugin(scope, entity, source_file)
+    write_installed_plugin_asset(scope, entity, source_file, rel_path, content)
+
+
+def sync_editable_file_scope_to_source(scope: str, entity: dict, source_file: Path, editable_file: dict) -> None:
+    target = installed_file_target(scope, entity, source_file, editable_file)
+    if target is None or not target.exists():
+        raise ValueError("Installed file does not exist in selected scope")
+    role = str(editable_file.get("role") or "")
+    content = target.read_text(encoding="utf-8")
+    if role in {"instructions", "legacy"}:
+        content = strip_rendered_entity_header(content)
+    rel_path = str(editable_file.get("path") or "")
+    if role == "legacy":
+        raw = source_file.read_text(encoding="utf-8")
+        source_file.write_text(replace_yaml_block(raw, "content", content.rstrip("\n")), encoding="utf-8")
+        return
+    write_plugin_editable_file(str(entity["id"]), rel_path, content)
 
 
 def write_installed_plugin(scope: str, entity: dict, source_file: Path) -> None:
@@ -798,6 +877,11 @@ def collect_entities_index() -> dict:
                 for scope, is_installed in installed.items()
                 if is_installed
             }
+            for editable_file in entity.get("editableFiles", []):
+                editable_file["scopeStatus"] = {
+                    scope: editable_file_scope_status(scope, entity, path, editable_file)
+                    for scope in ("global", "project")
+                }
             for scope in scope_changes:
                 scope_changes[scope] = scope_changes[scope] or bool(entity["modified"].get(scope))
             entity["installPaths"] = install_paths
@@ -2058,6 +2142,33 @@ class Handler(BaseHTTPRequestHandler):
                 for rel_path, content in file_contents.items():
                     write_installed_plugin_asset(scope, entity, source_file, rel_path, content)
             return self._send_json({"ok": True, "targets": targets, "entities": collect_entities_index()})
+
+        if parsed.path == "/api/entities/sync":
+            data = self._read_json()
+            entity_id = str(data.get("id") or "").strip()
+            scope = str(data.get("scope") or "").strip()
+            direction = str(data.get("direction") or "").strip()
+            rel_path = str(data.get("path") or "").strip()
+            if not entity_id or scope not in {"global", "project"} or direction not in {"source-to-scope", "scope-to-source"}:
+                return self._send_json({"error": "Choose a plugin, scope, and sync direction"}, status=400)
+            source_file = find_entity_source_file(entity_id)
+            if source_file is None:
+                return self._send_json({"error": "Plugin not found"}, status=404)
+            entity = parse_entity_file(source_file)
+            if entity is None:
+                return self._send_json({"error": "Plugin source could not be parsed"}, status=500)
+            files = entity.get("editableFiles", [])
+            editable_file = next((item for item in files if str(item.get("path") or "") == rel_path), None)
+            if editable_file is None:
+                return self._send_json({"error": "Editable plugin file not found"}, status=404)
+            try:
+                if direction == "source-to-scope":
+                    sync_editable_file_source_to_scope(scope, entity, source_file, editable_file)
+                else:
+                    sync_editable_file_scope_to_source(scope, entity, source_file, editable_file)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            return self._send_json({"ok": True, "entities": collect_entities_index()})
 
         if parsed.path == "/api/categories/create":
             data = self._read_json()
