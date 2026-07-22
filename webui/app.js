@@ -311,6 +311,26 @@ function selectEntity(id) {
   render();
 }
 
+async function switchScope(scope) {
+  if (scope === appState.scope) return;
+  if (scope === 'source') {
+    appState.scope = scope;
+    render();
+    return;
+  }
+  const entity = currentEntity();
+  if (!entity) {
+    setStatus('Select a plugin before switching to an installed scope.', 'error');
+    return;
+  }
+  if (!entity.installed?.[scope]) {
+    const installed = await setEntityScope(entity, scope, true, { renderAfter: false });
+    if (!installed) return;
+  }
+  appState.scope = scope;
+  render();
+}
+
 function renderScopeControls() {
   const entity = currentEntity();
   document.querySelectorAll('.segment').forEach((button) => {
@@ -322,10 +342,7 @@ function renderScopeControls() {
     button.setAttribute('aria-label', modified
       ? `${button.textContent.trim()} scope differs from source for selected plugin`
       : `${button.textContent.trim()} scope`);
-    button.onclick = () => {
-      appState.scope = button.dataset.scope;
-      render();
-    };
+    button.onclick = () => switchScope(button.dataset.scope);
   });
   workspace.classList.remove('scopeSource', 'scopeUser', 'scopeProject');
   workspace.classList.add(appState.scope === 'global' ? 'scopeUser' : `scope${scopeLabel(appState.scope)}`);
@@ -846,11 +863,11 @@ async function refresh() {
   render();
 }
 
-async function setEntityScope(entity, scope, enabled) {
-  if (!entity) return;
+async function setEntityScope(entity, scope, enabled, options = {}) {
+  if (!entity) return false;
   if (scope === 'source') {
     setStatus('Source is edited directly. Use Save to write source changes.', 'ok');
-    return;
+    return true;
   }
   try {
     setStatus(`${enabled ? 'Installing' : 'Removing'} ${entity.id} ...`);
@@ -861,9 +878,11 @@ async function setEntityScope(entity, scope, enabled) {
     });
     await applyEntityIndex(data.entities);
     setStatus(`${enabled ? 'Installed' : 'Removed'} ${entity.id} in ${scopeLabel(scope)} scope`, 'ok');
-    render();
+    if (options.renderAfter !== false) render();
+    return true;
   } catch (error) {
     setStatus(error.message, 'error');
+    return false;
   }
 }
 
