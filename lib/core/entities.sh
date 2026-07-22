@@ -183,14 +183,26 @@ ork_entity_script_source_path() {
 
 ork_entity_install_script_if_needed() {
     local scope="$1" project="$2" file="$3"
-    local typ executable entrypoint script_src scripts_dir script_dst
+    local typ executable entrypoint script_src scripts_dir script_dst plugin_dir script_file
+    scripts_dir="$(ork_scope_dir "$scope" "$project")/bin"
+    if [[ "$(basename "$file")" == "manifest.yaml" ]]; then
+        plugin_dir="$(ork_entity_plugin_dir "$file")"
+        [[ -d "$plugin_dir/bin" ]] || return 0
+        mkdir -p "$scripts_dir"
+        while IFS= read -r script_file; do
+            script_dst="$scripts_dir/$(basename "$script_file")"
+            cp "$script_file" "$script_dst"
+            chmod +x "$script_dst"
+        done < <(find "$plugin_dir/bin" -type f -name "*.sh" | sort)
+        return 0
+    fi
+
     typ="$(ork_entity_yaml_value "$file" "type")"
     executable="$(ork_entity_yaml_value "$file" "executable")"
     entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
 
     [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
     script_src="$(ork_entity_script_source_path "$file" "$entrypoint")" || ork_die "Script entrypoint not found: $entrypoint"
-    scripts_dir="$(ork_scope_dir "$scope" "$project")/bin"
     script_dst="$scripts_dir/$entrypoint"
     mkdir -p "$scripts_dir"
     cp "$script_src" "$script_dst"
@@ -199,13 +211,24 @@ ork_entity_install_script_if_needed() {
 
 ork_entity_remove_script_if_needed() {
     local scope="$1" project="$2" file="$3"
-    local typ executable entrypoint script_dst
+    local typ executable entrypoint script_dst plugin_dir script_file scripts_dir
+    scripts_dir="$(ork_scope_dir "$scope" "$project")/bin"
+    if [[ "$(basename "$file")" == "manifest.yaml" ]]; then
+        plugin_dir="$(ork_entity_plugin_dir "$file")"
+        [[ -d "$plugin_dir/bin" ]] || return 0
+        while IFS= read -r script_file; do
+            script_dst="$scripts_dir/$(basename "$script_file")"
+            [[ -f "$script_dst" ]] && rm -f "$script_dst"
+        done < <(find "$plugin_dir/bin" -type f -name "*.sh" | sort)
+        return 0
+    fi
+
     typ="$(ork_entity_yaml_value "$file" "type")"
     executable="$(ork_entity_yaml_value "$file" "executable")"
     entrypoint="$(ork_entity_yaml_value "$file" "entrypoint")"
 
     [[ "$typ" == "shell" && "$executable" == "true" && -n "$entrypoint" ]] || return 0
-    script_dst="$(ork_scope_dir "$scope" "$project")/bin/$entrypoint"
+    script_dst="$scripts_dir/$entrypoint"
     [[ -f "$script_dst" ]] && rm -f "$script_dst"
 }
 
