@@ -126,10 +126,17 @@ ork_entity_yaml_list_value() {
     value="$(ork_entity_yaml_value "$file" "$key")"
     value="${value#[}"
     value="${value%]}"
-    value="${value//,/ }"
     value="${value//\"/}"
     value="${value//\'/}"
-    printf "%s\n" "$value"
+    awk -v raw="$value" '
+        BEGIN {
+            n = split(raw, items, ",")
+            for (i = 1; i <= n; i++) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", items[i])
+                if (items[i] != "") print items[i]
+            }
+        }
+    '
 }
 
 ork_entity_yaml_block() {
@@ -260,6 +267,22 @@ ork_entity_requirements_missing() {
     return "$missing"
 }
 
+ork_entity_install_dependencies() {
+    local scope="$1" project="$2" file="$3" stack="${4:-}"
+    local req req_file
+    while IFS= read -r req; do
+        [[ -n "$req" ]] || continue
+        if [[ " $stack " == *" $req "* ]]; then
+            ork_die "Circular plugin dependency detected: $stack $req"
+        fi
+        if ork_entity_is_installed "$scope" "$project" "$req"; then
+            continue
+        fi
+        req_file="$(ork_entity_source_path "$req")" || ork_die "Entity $(ork_entity_yaml_value "$file" "id") requires missing entity: $req"
+        ork_entity_enable "$scope" "$project" "$req" "$stack $req"
+    done < <(ork_entity_yaml_list_value "$file" "requires")
+}
+
 ork_write_agents_index() {
     local scope="$1" project="$2"
     local scope_dir index entities_dir
@@ -337,15 +360,14 @@ ork_write_agent_hooks() {
 }
 
 ork_entity_enable() {
-    local scope="$1" project="$2" id="$3"
-    local file dst conflict missing instruction
+    local scope="$1" project="$2" id="$3" stack="${4:-$3}"
+    local file dst conflict instruction
     file="$(ork_entity_source_path "$id")" || ork_die "Entity not found: $id"
 
     conflict="$(ork_entity_conflict "$scope" "$project" "$file" || true)"
     [[ -z "$conflict" ]] || ork_die "Entity $id conflicts with installed entity: $conflict"
 
-    missing="$(ork_entity_requirements_missing "$scope" "$project" "$file" || true)"
-    [[ -z "$missing" ]] || ork_die "Entity $id requires missing entity: $missing"
+    ork_entity_install_dependencies "$scope" "$project" "$file" "$stack"
 
     dst="$(ork_entity_installed_path "$scope" "$project" "$id")"
     mkdir -p "$(dirname "$dst")"
